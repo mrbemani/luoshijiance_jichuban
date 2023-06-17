@@ -1,0 +1,8 @@
+pyyaml
+pillow
+opencv-python
+opencv-contrib-python
+pysimplegui
+numpy
+scipy
+addict

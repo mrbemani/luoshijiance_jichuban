@@ -1,0 +1,17 @@
+debug: false
+frame_dist_cm: 1.0
+max_detection: 240
+rknn_model_path: classifier.rknn
+rock_boundaries: []
+roi_mask: ./mask.png
+tracking:
+  det_h: 720
+  det_w: 720
+  dist_thresh: 80
+  max_object_count: 20
+  max_rock_pix: 300
+  max_rock_ratio: 2.0
+  max_skip_frame: 3
+  max_trace_length: 2
+  min_rock_pix: 8
+video_src: /home/firefly/human1.webm
