@@ -6,6 +6,8 @@ __author__ = "Shi Qi"
 import sys
 import os
 import argparse
+import shutil
+
 import queue
 import cv2
 import numpy as np
@@ -245,7 +247,8 @@ def main_loop(args):
             pushed_frame = cv2.imencode('.png', _frame)[1].tobytes()
             frame_is_ready = True
             continue
-
+        
+        
         debug_rects = []
         # Find centers of all detected objects
         for i in range(1, num_labels):
@@ -267,18 +270,25 @@ def main_loop(args):
                     continue
 
             if w >= blob_min_width_far and h >= blob_min_height_far:
-                patch = frame[y:y+h, x:x+w].copy()
+                max_wh = np.max([w, h])
+                max_x = x + max_wh
+                max_y = y + max_wh
+                if max_x >= original_w:
+                    max_x = original_w - 1
+                if max_y >= original_h:
+                    max_y = original_h - 1
+                patch = original_frame[y:max_y, x:max_x].copy()
                 if patch is None:
                     print ("---invalid patch---")
                 else:
                     sqr_patch = objcls.pad_image(patch)
-                    if sqr_patch.shape[0] != 64 or sqr_patch.shape[1] != 64:
-                        sqr_patch = cv2.resize(sqr_patch, (64, 64))
-                    cv2.imwrite(f"./tmp/patch_{str(i).zfill(4)}_{int(time.time()*1000)}.jpg", sqr_patch)
-                    outputs = objcls.run_inference(model, sqr_patch)
+                    if sqr_patch.shape[0] != 224 or sqr_patch.shape[1] != 224:
+                        sqr_patch = cv2.resize(sqr_patch, (224, 224))
+                    outputs = objcls.run_inference(model, sqr_patch)[0]
                     obj_class_index = np.argmax(outputs) + 1
-                    print (obj_class_index)
-                    if obj_class_index == 7:
+                    obj_class_confidence = outputs[obj_class_index-1]
+                    cv2.imwrite(f"./tmp/patch_{str(i).zfill(4)}_{obj_class_index}_{int(obj_class_confidence * 100)}_{int(time.time()*1000)}.jpg", sqr_patch)
+                    if obj_class_confidence < 0.5:
                         center = np.array ([[x+w/2], [y+h/2]])
                         centers.append(np.round(center))
                         cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
@@ -384,6 +394,12 @@ if __name__ == "__main__":
     
     if args.video_src is not None and args.video_src != "":
         config.video_src = args.video_src
+
+    # clear tmp dir
+    if os.path.exists("./tmp"):
+        shutil.rmtree("./tmp")
+    os.mkdir("./tmp")
+
 
     # start video capture thread
     video_capture_thread = threading.Thread(target=fetch_frame_loop, args=())

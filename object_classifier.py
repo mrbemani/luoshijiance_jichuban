@@ -40,7 +40,7 @@ def pad_image(image: np.ndarray) -> np.ndarray:
 
 
 # Preprocess the input image
-def preprocess_image(image: np.ndarray, input_size: tuple = (64, 64)) -> np.ndarray:
+def preprocess_image(image: np.ndarray, input_size: tuple = (224, 224)) -> np.ndarray:
     if image is None:
         raise ValueError('The input image is None.')
     if len(image.shape) != 3:
@@ -53,9 +53,7 @@ def preprocess_image(image: np.ndarray, input_size: tuple = (64, 64)) -> np.ndar
     if image.shape[0] != input_size[1] or image.shape[1] != input_size[0]:
         image = cv.resize(image, input_size)  # Resize the image according to your model input size
     image = np.float32(image)
-    #image = (image - [123.675, 116.28, 103.53]) / [58.395, 57.12, 57.375]  # Apply normalization
     image = np.transpose(image, (2, 0, 1))  # Change from HWC to CHW format
-    #image = np.expand_dims(image, axis=0)  # Add batch dimension
     return image
 
 
@@ -71,8 +69,26 @@ def postprocess(output):
 def run_inference(rknn_model, image):
     image = preprocess_image(image)
     outputs = rknn_model.inference(inputs=[image])[0]
-    #print (outputs)
     outputs = postprocess(outputs)
     return outputs
 
+if __name__ == '__main__':
+    import sys
+    # Load the model
+    rknn_model = load_rknn_model(sys.argv[1])
+
+    # Read the image
+    image = cv.imread(sys.argv[2])
+
+    # Run inference
+    outputs = run_inference(rknn_model, image)[0]
+    top1 = np.argmax(outputs)
+    conf1 = outputs[top1]
+
+    # Print the result
+    print (outputs)
+    print (top1+1, conf1)
+
+    # Release the model
+    rknn_model.release()
 
