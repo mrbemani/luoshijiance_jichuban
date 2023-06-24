@@ -6,7 +6,9 @@ __author__ = "Shi Qi"
 import sys
 import os
 import argparse
-from datetime import datetime, timedelta
+import shutil
+
+import queue
 import cv2
 import numpy as np
 import time
@@ -17,16 +19,11 @@ import threading
 import multiprocessing as mpr
 from datetime import datetime
 from PIL import Image
-import queue
 
 import object_classifier as objcls
 
-from flask import Flask, render_template, Response, request, jsonify, send_from_directory
-
 from kalman_filter import KalmanFilter
 from tracker import Tracker
-
-#cv2.ocl.setUseOpenCL(True)
 
 
 import boundaryeditor
@@ -65,8 +62,7 @@ frame_queue = queue.Queue(1)
 main_loop_running = True
 frame_is_ready = False
 original_frame = None
-pushed_frame = bytes()
-blank_img = np.zeros((PF_H, PF_W, 3), np.uint8)
+pushed_frame = None
 video_src_ended = False
 
 
@@ -99,6 +95,31 @@ def create_video_writer(fps=30, resolution=(PF_W, PF_H)):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     video_writer = cv2.VideoWriter(filename, fourcc, fps, resolution)
     return video_writer, dtnow.timestamp()
+
+
+def fetch_frame_loop():
+    # Capture livestream
+    print (config.video_src)
+    cap = cv2.VideoCapture (config.video_src)
+    ret = True
+    while main_loop_running:
+        ret, frame = cap.read()
+        while not ret or frame is None: # try to reconnect forever
+            cap.release()
+            cap = cv2.VideoCapture (config.video_src)
+            ret, frame = cap.read()
+            if ret is None or frame is None:
+                time.sleep(0.5)
+                continue
+        try:
+            frame_queue.put(frame, timeout=0.03)
+        except queue.Full:
+            try:
+                frame_queue.get(timeout=0.1)
+            except:
+                pass
+            frame_queue.put_nowait(frame)
+    cap.release()
 
 
 def loadConfig(cfgfile=None):
@@ -136,32 +157,15 @@ def show_editBoundaries_window():
         saveConfig()
 
 
-def fetch_frame_loop():
-    # Capture livestream
-    cap = cv2.VideoCapture (config.video_src)
-    ret = True
-    while main_loop_running:
-        ret, frame = cap.read()
-        while not ret or frame is None: # try to reconnect forever
-            cap.release()
-            cap = cv2.VideoCapture (config.video_src)
-            ret, frame = cap.read()
-            if ret is None or frame is None:
-                time.sleep(0.5)
-                continue
-        try:
-            frame_queue.put_nowait(frame)
-        except queue.Full:
-            frame_queue.get()
-            frame_queue.put_nowait(frame)
-    cap.release()
-
-
-def main_loop():
+def main_loop(args):
     global original_frame, pushed_frame, frame_is_ready, video_src_ended
-    
-    # Create video writer
-    video_writer, video_start_time = create_video_writer()
+
+    model = objcls.load_rknn_model(config.rknn_model_path)
+
+    # load ROI Mask
+    roi_mask = None
+    if config.roi_mask is not None and os.path.isfile(config.roi_mask) and config.roi_mask != "None":
+        roi_mask = cv2.imread(config.roi_mask, cv2.IMREAD_GRAYSCALE)
 
     # Initial background subtractor and text font
     fgbg = cv2.createBackgroundSubtractorMOG2()
@@ -174,8 +178,8 @@ def main_loop():
     blob_min_width_far = config.tracking.min_rock_pix
     blob_min_height_far = config.tracking.min_rock_pix
 
-    blob_min_width_near = blob_min_width_far * 4
-    blob_min_height_near = blob_min_height_far * 4
+    blob_max_width_near = config.tracking.max_rock_pix
+    blob_max_height_near = config.tracking.max_rock_pix
 
     frame_start_time = None
 
@@ -185,31 +189,27 @@ def main_loop():
         config.tracking.max_skip_frame, 
         config.tracking.max_trace_length, 1)
 
-    
+
     while main_loop_running:
-        fps_f = cv2.getTickCount()    
+        fps_f = cv2.getTickCount()
 
         centers = []
         frame_start_time = datetime.utcnow()
-
-        dtnow = datetime.now().timestamp()
-        if dtnow - video_start_time > 60 * 2: # 2 minutes
-            video_writer.release()
-            video_writer, video_start_time = create_video_writer()
-
+        
         frame = frame_queue.get()
+        if frame is None:
+            print ("frame is empty")
+            continue
 
-        # Save original frame
         original_frame = copy.copy(frame)
 
-
+        
         original_w, original_h = original_frame.shape[1], original_frame.shape[0]
         det_w = config.tracking.det_w
         det_h = config.tracking.det_h
         pf_ratio_w = original_w / det_w
         pf_ratio_h = original_h / det_h
-
-
+        
         # Resize frame to fit the screen
         det_frame = cv2.resize(frame, (det_w, det_h))
 
@@ -234,6 +234,7 @@ def main_loop():
         # apply connected components
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(morph, connectivity=8, ltype=cv2.CV_32S)
 
+
         # if too many objects detected, skip this frame
         if num_labels > config.tracking.max_object_count:
             frame_is_ready = False
@@ -241,26 +242,60 @@ def main_loop():
             pushed_frame = cv2.imencode('.png', _frame)[1].tobytes()
             frame_is_ready = True
             continue
-
+        
+        
+        debug_rects = []
         # Find centers of all detected objects
         for i in range(1, num_labels):
             x, y, w, h, area = stats[i]
-            
-            if area < 25:
+
+            if x < 10 or y < 10 or area < 100: # skip small objects (10x10 pixels)
                 continue
-            
+
+            if w / h > 2 or h / w > 2:
+                continue
+
             x = int(x * pf_ratio_w)
             y = int(y * pf_ratio_h)
             w = int(w * pf_ratio_w)
             h = int(h * pf_ratio_h)
 
-            if w >= blob_min_width_far and h >= blob_min_height_far:
-                center = np.array ([[x+w/2], [y+h/2]])
-                centers.append(np.round(center))
+            if roi_mask is not None:
+                if not roi_mask[y+h//2, x+w//2] > 0:
+                    continue
 
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            if w >= blob_min_width_far and h >= blob_min_height_far:
+                max_wh = np.max([w, h])
+                max_x = x + max_wh
+                max_y = y + max_wh
+                if max_x >= original_w:
+                    max_x = original_w - 1
+                if max_y >= original_h:
+                    max_y = original_h - 1
+                patch = original_frame[y:max_y, x:max_x].copy()
+                if patch is None:
+                    print ("---invalid patch---")
+                else:
+                    sqr_patch = objcls.pad_image(patch)
+                    if sqr_patch.shape[0] != 224 or sqr_patch.shape[1] != 224:
+                        sqr_patch = cv2.resize(sqr_patch, (224, 224))
+                    outputs = objcls.run_inference(model, sqr_patch)[0]
+                    obj_class_index = np.argmax(outputs) + 1
+                    obj_class_confidence = outputs[obj_class_index-1]
+                    cv2.imwrite(f"./tmp/patch_{str(i).zfill(4)}_{obj_class_index}_{int(obj_class_confidence * 100)}_{int(time.time()*1000)}.jpg", sqr_patch)
+                    if obj_class_confidence < 0.5:
+                        center = np.array ([[x+w/2], [y+h/2]])
+                        centers.append(np.round(center))
+                        cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            
+            if config.debug:
+                cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 255, 255), 2)
 
         obj_cnt = len(centers)
+        if config.debug:
+            if obj_cnt > 0:
+                print ("object_count: ", obj_cnt)
+        
         if centers:
             tracker.update(centers)
             obj_cnt = max(len(tracker.tracks), len(centers))
@@ -320,75 +355,63 @@ def main_loop():
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
         fps_e = (1.0 / ((cv2.getTickCount() - fps_f) / cv2.getTickFrequency()))
-        fps_e = int(round(fps_e))
-
-        if frame is not None:
-            if fps_e <= 0: fps_e = 30
-            n_frame_repeat = 30 // fps_e
-            for i in range(n_frame_repeat):
-                video_writer.write(frame)
-        
+        fps_e = round(fps_e)
 
         frame_is_ready = False
-        _frame = cv2.resize(frame, (720, 480), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
-        pushed_frame = cv2.imencode('.jpg', _frame)[1].tobytes()
+        _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+        pushed_frame = cv2.imencode('.png', _frame)[1].tobytes()
         frame_is_ready = True
         #cv2.imshow("test", pushed_frame)
         cv2.waitKey(1)
 
 
     # Clean up
+    model.release()
     video_src_ended = True
-    video_writer.release()
     if config.debug:
         print ("main_loop aborted.")
 
 
-def push_mjpeg_to_http():
-    global frame_is_ready, pushed_frame
-    while True:
-        if frame_is_ready:
-            out_img = pushed_frame
-            frame_is_ready = False
-            yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + out_img + b'\r\n')
-
-webapp = Flask(__name__)
-
-@webapp.route('/video')
-def video_feed():
-    #return push_mjpeg_to_http()
-    return Response(push_mjpeg_to_http(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-
-@webapp.route('/')
-def index():
-    return "<html><head><title>Video Streaming</title></head><body><img src='/video'></body></html>"
 
 
 if __name__ == "__main__":
-    if not os.path.exists(os.path.join(APP_BASE_DIR, "videos")):
-        print ("videos directory not found. Creating...")
-        os.mkdir(os.path.join(APP_BASE_DIR, "videos"))
+
+    parser = argparse.ArgumentParser(description='Rock detection and tracking')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+    parser.add_argument('--cfg', type=str, help='Config file path', default="settings.yml")
+    parser.add_argument('-i', '--video_src', type=str, help='Video source')
+    args = parser.parse_args()
 
     # load config
-    loadConfig()
+    loadConfig(args.cfg)
+    if args.debug is True:
+        config.debug = args.debug
     
+    if args.video_src is not None and args.video_src != "":
+        config.video_src = args.video_src
+
+    # clear tmp dir
+    if os.path.exists("./tmp"):
+        shutil.rmtree("./tmp")
+    os.mkdir("./tmp")
+
+
     # start video capture thread
     video_capture_thread = threading.Thread(target=fetch_frame_loop, args=())
     video_capture_thread.start()
 
     # start main_loop thread
-    main_loop_thread = threading.Thread(target=main_loop, args=())
+    main_loop_thread = threading.Thread(target=main_loop, args=(args,))
     main_loop_thread.start()
 
-    # start bottle server
-    try:
-        webapp.run(host="0.0.0.0", port=8080)
-    except KeyboardInterrupt as kbi:
-        print ("Keyboard interrupt received.")
+    
 
+    print ("Application is Deinitializing...", end='', flush=True)
     main_loop_running = False
+    time.sleep(0.5)
+    main_loop_thread.join()	
+    
+    window.close()
     print ("OK")
     if config.debug:
         print ("App closed.")

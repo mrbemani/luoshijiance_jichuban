@@ -4,7 +4,11 @@ __author__ = 'Mr.Bemani'
 
 import cv2 as cv
 import numpy as np
-from rknnlite.api import RKNNLite
+
+try:
+    from rknnlite.api import RKNNLite
+except ImportError:
+    raise ImportError('Please install RKNNToolkit first.')
 
 
 # Load the RKNN model
@@ -40,7 +44,7 @@ def pad_image(image: np.ndarray) -> np.ndarray:
 
 
 # Preprocess the input image
-def preprocess_image(image: np.ndarray, input_size: tuple = (224, 224)) -> np.ndarray:
+def preprocess_image(image: np.ndarray, input_size: tuple = (64, 64)) -> np.ndarray:
     if image is None:
         raise ValueError('The input image is None.')
     if len(image.shape) != 3:
@@ -66,8 +70,8 @@ def postprocess(output):
 
 
 # Run inference
-def run_inference(rknn_model, image):
-    image = preprocess_image(image)
+def run_inference(rknn_model, image, input_size=(64, 64)):
+    image = preprocess_image(image, input_size)
     outputs = rknn_model.inference(inputs=[image])[0]
     outputs = postprocess(outputs)
     return outputs
