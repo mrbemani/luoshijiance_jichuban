@@ -1,7 +1,8 @@
 # -*- encoding: utf-8 -*-
 
 
-__author__ = "Shi Qi"
+__author__ = "Mr.Bemani"
+
 
 import sys
 import os
@@ -13,12 +14,12 @@ import cv2
 import numpy as np
 import time
 import copy
-import yaml
-from addict import Dict
 import threading
 import multiprocessing as mpr
 from datetime import datetime
 from PIL import Image
+
+from configure import config, loadConfig, saveConfig
 
 import object_classifier as objcls
 
@@ -26,34 +27,11 @@ from kalman_filter import KalmanFilter
 from tracker import Tracker
 
 
-import boundaryeditor
-
-
 if getattr(sys, 'frozen', False):
     APP_BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
 elif __file__:
     APP_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-
-#######################################################################################################################
-# fix win10 scaling issue
-if os.name == 'nt':
-    import ctypes
-    # Query DPI Awareness (Windows 10 and 8)
-    awareness = ctypes.c_int()
-    errorCode = ctypes.windll.shcore.GetProcessDpiAwareness(0, ctypes.byref(awareness))
-    #print(awareness.value)
-
-    # Set DPI Awareness  (Windows 10 and 8)
-    errorCode = ctypes.windll.shcore.SetProcessDpiAwareness(2)
-    # the argument is the awareness level, which can be 0, 1 or 2:
-    # for 1-to-1 pixel control I seem to need it to be non-zero (I'm using level 2)
-
-    # Set DPI Awareness  (Windows 7 and Vista)
-    success = ctypes.windll.user32.SetProcessDPIAware()
-    # behaviour on later OSes is undefined, although when I run it on my Windows 10 machine, it seems to work with 
-    # effects identical to SetProcessDpiAwareness(1)
-#######################################################################################################################
 
 PF_W = 1280
 PF_H = 720
@@ -66,95 +44,7 @@ pushed_frame = None
 video_src_ended = False
 
 
-config = Dict()
 
-config.debug = False
-
-config.frame_dist_cm = 1.0
-config.max_detection = 240
-
-config.video_src = 0
-config.rock_boundaries = []
-
-config.tracking.min_rock_pix = 8
-config.tracking.max_rock_pix = 300
-config.tracking.max_rock_ratio = 2.0
-config.tracking.dist_thresh = 80
-config.tracking.max_skip_frame = 3
-config.tracking.max_trace_length = 2
-config.tracking.max_object_count = 20
-
-default_cfgfile = os.path.join(APP_BASE_DIR, "settings.yml")
-
-
-# write out video file as mp4
-def create_video_writer(fps=30, resolution=(PF_W, PF_H)):
-    dtnow = datetime.now()
-    datetime_str = dtnow.strftime("%Y%m%d_%H%M%S")
-    filename = os.path.join(APP_BASE_DIR, "videos", datetime_str + ".mp4")
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    video_writer = cv2.VideoWriter(filename, fourcc, fps, resolution)
-    return video_writer, dtnow.timestamp()
-
-
-def fetch_frame_loop():
-    # Capture livestream
-    print (config.video_src)
-    cap = cv2.VideoCapture (config.video_src)
-    ret = True
-    while main_loop_running:
-        ret, frame = cap.read()
-        while not ret or frame is None: # try to reconnect forever
-            cap.release()
-            cap = cv2.VideoCapture (config.video_src)
-            ret, frame = cap.read()
-            if ret is None or frame is None:
-                time.sleep(0.5)
-                continue
-        try:
-            frame_queue.put(frame, timeout=0.03)
-        except queue.Full:
-            try:
-                frame_queue.get(timeout=0.1)
-            except:
-                pass
-            frame_queue.put_nowait(frame)
-    cap.release()
-
-
-def loadConfig(cfgfile=None):
-    global config
-    if cfgfile is None:
-        cfgfile = default_cfgfile
-    if not os.path.isfile(cfgfile):
-        return False
-    try:
-        config.update(yaml.load(open(cfgfile, 'r'), Loader=yaml.FullLoader))
-        return True
-    except Exception as e:
-        print (e)
-    return False	
-
-def saveConfig(cfgfile=None):
-    global config
-    if cfgfile is None:
-        cfgfile = default_cfgfile
-    if not os.path.isfile(cfgfile):
-        return False
-    try:
-        yaml.dump(config.to_dict(), open(cfgfile, 'w+'))
-        return True
-    except Exception as e:
-        print (e)
-    return False	
-
-
-def show_editBoundaries_window():
-    global config
-    ret, polys = boundaryeditor.showEditWin(original_frame, config.rock_boundaries)
-    if ret:
-        config.rock_boundaries = [list(list(p) for p in x) for x in polys]
-        saveConfig()
 
 
 def main_loop(args):
@@ -364,13 +254,11 @@ def main_loop(args):
         #cv2.imshow("test", pushed_frame)
         cv2.waitKey(1)
 
-
     # Clean up
     model.release()
     video_src_ended = True
     if config.debug:
         print ("main_loop aborted.")
-
 
 
 
@@ -380,6 +268,8 @@ if __name__ == "__main__":
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('--cfg', type=str, help='Config file path', default="settings.yml")
     parser.add_argument('-i', '--video_src', type=str, help='Video source')
+    parser.add_argument('-o', '--output_dir', type=str, help='Output video file basepath')
+    parser.add_argument('--pc_test', action='store_true', help='Test on PC')
     args = parser.parse_args()
 
     # load config
@@ -389,6 +279,14 @@ if __name__ == "__main__":
     
     if args.video_src is not None and args.video_src != "":
         config.video_src = args.video_src
+
+    if args.output_dir is not None and args.output_dir != "":
+        config.output_dir = args.output_dir
+
+    if args.pc_test is True:
+        config.pc_test = True
+
+    
 
     # clear tmp dir
     if os.path.exists("./tmp"):
@@ -404,14 +302,12 @@ if __name__ == "__main__":
     main_loop_thread = threading.Thread(target=main_loop, args=(args,))
     main_loop_thread.start()
 
-    
-
     print ("Application is Deinitializing...", end='', flush=True)
     main_loop_running = False
     time.sleep(0.5)
     main_loop_thread.join()	
-    
-    window.close()
+
+
     print ("OK")
     if config.debug:
         print ("App closed.")
