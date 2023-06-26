@@ -14,7 +14,6 @@ import threading
 import logging
 
 
-
 # write out video file as mp4
 def create_video_writer(fps=30, resolution=(1280, 720), video_dir="./videos"):
     if not os.path.isdir(video_dir):
