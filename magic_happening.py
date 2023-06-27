@@ -26,7 +26,7 @@ pushed_frame = None
 video_src_ended = False
 
 
-def process_frame_loop(config: dict, alert_image_fname: str, main_loop_running_cb: function):
+def process_frame_loop(config: dict, main_loop_running_cb: function):
     global original_frame, pushed_frame, frame_is_ready, video_src_ended
 
     model = objcls.load_rknn_model(config.rknn_model_path)
@@ -41,8 +41,6 @@ def process_frame_loop(config: dict, alert_image_fname: str, main_loop_running_c
     font = cv2.FONT_HERSHEY_PLAIN
 
     centers = [] 
-
-    alert_im = Image.open(alert_image_fname)
 
     blob_min_width_far = config.tracking.min_rock_pix
     blob_min_height_far = config.tracking.min_rock_pix
@@ -113,7 +111,7 @@ def process_frame_loop(config: dict, alert_image_fname: str, main_loop_running_c
             continue
         
         
-        debug_rects = []
+        obj_rects = []
         # Find centers of all detected objects
         for i in range(1, num_labels):
             x, y, w, h, area = stats[i]
@@ -155,7 +153,8 @@ def process_frame_loop(config: dict, alert_image_fname: str, main_loop_running_c
                     if obj_class_confidence < 0.5:
                         center = np.array ([[x+w/2], [y+h/2]])
                         centers.append(np.round(center))
-                        cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                        obj_rects.append([x, y, w, h, area])
+                        #cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
             
             if config.debug:
                 cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 255, 255), 2)
@@ -169,35 +168,33 @@ def process_frame_loop(config: dict, alert_image_fname: str, main_loop_running_c
             tracker.update(centers)
             obj_cnt = max(len(tracker.tracks), len(centers))
             if len(tracker.tracks) < config.max_detection:
-                for vehicle in tracker.tracks:
-                    if len(vehicle.trace) > 1:
-                        for j in range(len(vehicle.trace)-1):
+                for tracked_object in tracker.tracks:
+                    if len(tracked_object.trace) > 1:
+                        for j in range(len(tracked_object.trace)-1):
                             # Draw trace line
-                            x1 = vehicle.trace[j][0][0]
-                            y1 = vehicle.trace[j][1][0]
-                            x2 = vehicle.trace[j+1][0][0]
-                            y2 = vehicle.trace[j+1][1][0]
+                            x1 = tracked_object.trace[j][0][0]
+                            y1 = tracked_object.trace[j][1][0]
+                            x2 = tracked_object.trace[j+1][0][0]
+                            y2 = tracked_object.trace[j+1][1][0]
 
                             cv2.line(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 255), 2)
 
-                        trace_i = len(vehicle.trace) - 1
+                        trace_i = len(tracked_object.trace) - 1
 
-                        trace_x = vehicle.trace[trace_i][0][0]
-                        trace_y = vehicle.trace[trace_i][1][0]
+                        trace_x = tracked_object.trace[trace_i][0][0]
+                        trace_y = tracked_object.trace[trace_i][1][0]
 
                         # Check if tracked object has reached the speed detection line
                         load_lag = (datetime.utcnow() - frame_start_time).total_seconds()
-                        time_dur = (datetime.utcnow() - vehicle.start_time).total_seconds() - load_lag
+                        time_dur = (datetime.utcnow() - tracked_object.start_time).total_seconds() - load_lag
                         
-                        vehicle.speed = config.frame_dist_cm / time_dur
+                        tracked_object.speed = config.frame_dist_cm / time_dur
 
-                        # If calculated speed exceeds speed limit, save an image of speeding car
-                        #if vehicle.speed > HIGHWAY_SPEED_LIMIT:
-                        #	pass
+
                     
                         # Display speed if available
-                        cv2.putText(frame, "SPD: {} CM/s".format(round(vehicle.speed, 2)), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
-                        # cv2.putText(frame, 'ID: '+ str(vehicle.track_id), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
+                        cv2.putText(frame, "SPD: {} CM/s".format(round(tracked_object.speed, 2)), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
+                        # cv2.putText(frame, 'ID: '+ str(tracked_object.track_id), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
                     
 
         # draw rock boundaries
@@ -207,7 +204,7 @@ def process_frame_loop(config: dict, alert_image_fname: str, main_loop_running_c
 
         # Display all images
         info_text = "Landslides: 0"
-        if obj_cnt > 0 and obj_cnt < config.max_detection and len(vehicle.trace) > 0:
+        if obj_cnt > 0 and obj_cnt < config.max_detection and len(tracked_object.trace) > 0:
             info_text = "Landslides: {}".format(obj_cnt)
         
         cv2.putText(frame, info_text, (87, 62), font, 2, (0, 0, 0), 2, cv2.LINE_AA)
@@ -217,8 +214,6 @@ def process_frame_loop(config: dict, alert_image_fname: str, main_loop_running_c
         if obj_cnt > 0:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             f_pim = Image.fromarray(frame)
-            
-            f_pim.paste(alert_im, (0, 0), alert_im)
 
             frame = np.asarray(f_pim)
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)

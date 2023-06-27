@@ -4,11 +4,17 @@ __author__ = 'Mr.Bemani'
 
 import sys
 import os
+import time
+import shutil
+import threading
+import logging
 
-from flask import 
-from configure import config, loadConfig, saveConfig
-from magic_happening import process_frame_loop, frame_queue
+from flask import Flask, render_template, Response, jsonify, send_from_directory
 
+from .configure import config, loadConfig, saveConfig
+
+from .video import fetch_frame_loop, create_video_writer
+from .magic_happening import process_frame_loop, frame_queue
 
 if getattr(sys, 'frozen', False):
     APP_BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
@@ -16,13 +22,50 @@ elif __file__:
     APP_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-app = flask.Flask(__name__)
+main_loop_running = False
+def main_loop_running_cb():
+    return main_loop_running
+
+app = Flask(__name__)
 
 alert_image_fname = os.path.join(APP_BASE_DIR, "assets", "alert_image.png")
 
+
+
+
 @app.route('/')
 def index():
-    return 'Hello, World!'
+    return "<script>window.location.href='/webui/';</script>"
+
+
+@app.route('/css/<path:path>')
+def send_css(path):
+    return send_from_directory('css', path)
+
+
+@app.route('/js/<path:path>')
+def send_js(path):
+    return send_from_directory('js', path)
+
+
+@app.route('/assets/<path:path>')
+def send_assets(path):
+    return send_from_directory('assets', path)
+
+
+@app.route('/webui/')
+def webui():
+    last_n_alerts = []
+    return render_template('html/index.tpl.html', alerts=last_n_alerts, video_preview_url="/video_preview")
+
+
+@app.route('/video_preview')
+def video_preview():
+    try:
+        frm = frame_queue.get(timeout=1)
+        yield Response(, mimetype='multipart/x-mixed-replace; boundary=frame')
+    except:
+        logging.error("Failed to get MJPEG frame from queue")
 
 
 if __name__ == '__main__':
@@ -49,12 +92,20 @@ if __name__ == '__main__':
     if args.pc_test is True:
         config.pc_test = True
 
-    
-
     # clear tmp dir
     if os.path.exists("./tmp"):
         shutil.rmtree("./tmp")
     os.mkdir("./tmp")
+
+    main_loop_running = True
+    
+    # start video fetch loop
+    video_fetch_thread = threading.Thread(target=fetch_frame_loop, args=(config, frame_queue, main_loop_running_cb))
+    video_fetch_thread.start()
+
+    # start video processing loop
+    video_process_thread = threading.Thread(target=process_frame_loop, args=(config, main_loop_running_cb))
+    video_process_thread.start()
 
     print ("Application is Deinitializing...", end='', flush=True)
     main_loop_running = False
@@ -64,6 +115,6 @@ if __name__ == '__main__':
     if config.debug:
         print ("App closed.")
 
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=True)
 
 
