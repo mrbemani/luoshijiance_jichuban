@@ -44,7 +44,7 @@ def pad_image(image: np.ndarray) -> np.ndarray:
 
 
 # Preprocess the input image
-def preprocess_image(image: np.ndarray, input_size: tuple = (64, 64)) -> np.ndarray:
+def preprocess_image(image: np.ndarray, input_size: tuple = (224, 224)) -> np.ndarray:
     if image is None:
         raise ValueError('The input image is None.')
     if len(image.shape) != 3:

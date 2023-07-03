@@ -61,7 +61,7 @@ class Tracker(object):
         self.tracks = []
         self.trackIdCount = trackIdCount
 
-    def update(self, detections):
+    def update(self, detections, allow_moving_up=True):
         """Update tracks vector using following steps:
             - Create tracks if no tracks vector found
             - Calculate cost using sum of square distance

@@ -7,6 +7,7 @@ import os
 import time
 import queue
 import cv2
+from addict import Dict
 import numpy as np
 from datetime import datetime
 from PIL import Image
@@ -28,12 +29,13 @@ def create_video_writer(fps=30, resolution=(1280, 720), video_dir="./videos"):
 
 
 # fetch frame from video source and put it into frame_queue
-def fetch_frame_loop(config, frame_put_queue, main_loop_running_cb):
+def fetch_frame_loop(config: Dict, keep_running: callable, frame_put_queue: queue.Queue):
     # Capture livestream
     logging.info("Initiating fetch_frame_loop with source: " + repr(config.video_src))
     cap = cv2.VideoCapture (config.video_src)
     ret = True
-    while main_loop_running_cb():
+    while keep_running():
+        #time.sleep(0.0333333) # 30 fps
         ret, frame = cap.read()
         while not ret or frame is None: # try to reconnect forever
             cap.release()

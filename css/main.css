@@ -26,6 +26,16 @@ body {
     flex-direction: column;
 }
 
+a#preview-link {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    text-decoration: none;
+    text-align: center;
+}
+
 img#preview, .preview {
     width: 100%;
     height: auto;
@@ -34,6 +44,7 @@ img#preview, .preview {
     padding: 0;
     border: 0;
     border-radius: 0;
+    text-align: center;
 }
 
 .section {

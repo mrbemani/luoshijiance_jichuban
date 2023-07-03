@@ -1,17 +1,24 @@
 debug: false
 frame_dist_cm: 1.0
 max_detection: 240
+output_dir: outputs
+preview_fps: 5
 rknn_model_path: classifier.rknn
 rock_boundaries: []
-roi_mask: ./mask.png
+roi_mask: ./mask333.png
 tracking:
-  det_h: 720
-  det_w: 720
-  dist_thresh: 80
-  max_object_count: 20
+  det_w: 1920
+  det_h: 1080
+  dist_thresh: 40
+  max_object_count: 50
   max_rock_pix: 300
-  max_rock_ratio: 2.0
-  max_skip_frame: 3
-  max_trace_length: 2
-  min_rock_pix: 8
-video_src: /home/firefly/human1.webm
+  max_rock_ratio: 2.5
+  max_skip_frame: 2
+  max_trace_length: 3
+  min_rock_pix: 16
+video_src: rtsp://admin:nd123456@192.168.1.108/
+camera_id: "001"
+location: "张家坝"
+sms:
+  phone: "18602330717"
+  sender: "南地科技"

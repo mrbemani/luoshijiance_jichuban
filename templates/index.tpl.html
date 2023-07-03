@@ -11,7 +11,7 @@
 </head>
 <body>
     <div class="container">
-        <img src="{{ video_preview_url }}" class="preview" id="preview">
+        <a id="preview-link" href="{{ live_url }}"><img src="{{ video_preview_url }}" class="preview" id="preview" alt="preview"></a>
         <div class="section info">
             <div class="title">监测对象概述</div>
             <ul class="tags">
@@ -46,7 +46,7 @@
                     <th>最大速度</th>
                 </tr>
                 {% for event in alerts %}
-                <tr>
+                <tr onclick="download_video('{{ event[4] }}')">
                     <td>{{ event[0] }}</td>
                     <td>{{ event[1] }}</td>
                     <td>{{ event[2] }}</td>

@@ -8,26 +8,40 @@ import queue
 import cv2
 import numpy as np
 import time
+import logging
 import copy
 from datetime import datetime
 from PIL import Image
 
-import object_classifier as objcls
+logging.basicConfig(level=logging.DEBUG)
+
+if "PC_TEST" in os.environ and os.environ["PC_TEST"] == "1":
+    logging.info("PC_TEST is set, object classification not available")
+    import object_classifier_mockup as objcls
+else:
+    try:
+        import object_classifier as objcls
+    except ImportError:
+        logging.error("Failed to import object_classifier. Object classifier not available")
+        import object_classifier_mockup as objcls
 from tracker import Tracker
 
 
-PF_W = 1280
-PF_H = 720
+from event_utils import create_falling_rock_event, store_event
+from sms import send_sms
 
-frame_queue = queue.Queue(1)
-frame_is_ready = False
+PF_W = 1920
+PF_H = 1080
+
+MAX_MOVE_UP = 10
+MAX_GAP_SECONDS = 5
+
 original_frame = None
-pushed_frame = None
 video_src_ended = False
 
 
-def process_frame_loop(config: dict, main_loop_running_cb: function):
-    global original_frame, pushed_frame, frame_is_ready, video_src_ended
+def process_frame_loop(config: dict, main_loop_running_cb: callable, frame_queue: queue.Queue, out_queue: queue.Queue, current_frame: np.ndarray):
+    global original_frame, pushed_frame, video_src_ended
 
     model = objcls.load_rknn_model(config.rknn_model_path)
 
@@ -39,8 +53,6 @@ def process_frame_loop(config: dict, main_loop_running_cb: function):
     # Initial background subtractor and text font
     fgbg = cv2.createBackgroundSubtractorMOG2()
     font = cv2.FONT_HERSHEY_PLAIN
-
-    centers = [] 
 
     blob_min_width_far = config.tracking.min_rock_pix
     blob_min_height_far = config.tracking.min_rock_pix
@@ -56,11 +68,28 @@ def process_frame_loop(config: dict, main_loop_running_cb: function):
         config.tracking.max_skip_frame, 
         config.tracking.max_trace_length, 1)
 
+    rock_evt = None
 
     while main_loop_running_cb():
         fps_f = cv2.getTickCount()
 
-        centers = []
+        ts_now = datetime.now().timestamp()
+        if rock_evt is not None and \
+           ts_now - rock_evt.ts_end > MAX_GAP_SECONDS:
+            store_event("events.csv", rock_evt)
+            send_sms(config, rock_evt)
+            rock_evt = None
+
+        if rock_evt is not None:
+            if not out_queue.empty():
+                try:
+                    wfrm = out_queue.get(timeout=0.1)
+                    if wfrm is not None:
+                        wfrm_fname = f"{int(datetime.now().timestamp()*1000)}.jpg"
+                        cv2.imwrite(os.path.join(rock_evt.frame_dir, wfrm_fname), wfrm)
+                except queue.Empty:
+                    pass    
+
         frame_start_time = datetime.utcnow()
         
         frame = frame_queue.get()
@@ -68,9 +97,8 @@ def process_frame_loop(config: dict, main_loop_running_cb: function):
             print ("frame is empty")
             continue
 
-        original_frame = copy.copy(frame)
+        original_frame = copy.deepcopy(frame)
 
-        
         original_w, original_h = original_frame.shape[1], original_frame.shape[0]
         det_w = config.tracking.det_w
         det_h = config.tracking.det_h
@@ -92,25 +120,36 @@ def process_frame_loop(config: dict, main_loop_running_cb: function):
 
         avg_color = np.average(morph)
         if avg_color > 255//10:
-            frame_is_ready = False
+            logging.debug(f"Too much noise detected, skipping frame: {avg_color}")
             _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
-            pushed_frame = cv2.imencode('.png', _frame)[1].tobytes()
-            frame_is_ready = True
+            current_frame[:] = _frame[:]
+            try:
+                if out_queue.full():
+                    out_queue.get()
+                out_queue.put(_frame)
+            except:
+                logging.error("out_queue failed to put frame")
             continue
 
         # apply connected components
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(morph, connectivity=8, ltype=cv2.CV_32S)
 
+        #morph = cv2.cvtColor(morph, cv2.COLOR_GRAY2BGR)
 
         # if too many objects detected, skip this frame
         if num_labels > config.tracking.max_object_count:
-            frame_is_ready = False
+            logging.debug(f"Too many movements detected, skipping frame: {num_labels}")
             _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
-            pushed_frame = cv2.imencode('.png', _frame)[1].tobytes()
-            frame_is_ready = True
+            current_frame[:] = _frame[:]
+            try:
+                if out_queue.full():
+                    out_queue.get()
+                out_queue.put(_frame)
+            except:
+                logging.error("out_queue failed to put frame")
             continue
         
-        
+        centers = []
         obj_rects = []
         # Find centers of all detected objects
         for i in range(1, num_labels):
@@ -149,22 +188,35 @@ def process_frame_loop(config: dict, main_loop_running_cb: function):
                     outputs = objcls.run_inference(model, sqr_patch)[0]
                     obj_class_index = np.argmax(outputs) + 1
                     obj_class_confidence = outputs[obj_class_index-1]
-                    cv2.imwrite(f"./tmp/patch_{str(i).zfill(4)}_{obj_class_index}_{int(obj_class_confidence * 100)}_{int(time.time()*1000)}.jpg", sqr_patch)
-                    if obj_class_confidence < 0.5:
+                    #cv2.imwrite(f"./tmp/patch_{str(i).zfill(4)}_{obj_class_index}_{int(obj_class_confidence * 100)}_{int(time.time()*1000)}.jpg", sqr_patch)
+                    if obj_class_confidence < 0.7:
                         center = np.array ([[x+w/2], [y+h/2]])
                         centers.append(np.round(center))
                         obj_rects.append([x, y, w, h, area])
-                        #cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-            
-            if config.debug:
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 255, 255), 2)
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 255, 255), 2)
 
         obj_cnt = len(centers)
         if config.debug:
             if obj_cnt > 0:
                 print ("object_count: ", obj_cnt)
-        
+
         if centers:
+            if rock_evt is None:
+                rock_evt = create_falling_rock_event()
+                rock_evt.frame_dir = os.path.join(config.output_dir, str(int(rock_evt.ts_start*1000)))
+                os.makedirs(rock_evt.frame_dir, exist_ok=True)
+            volumes = []
+            for rt in obj_rects:
+                # draw rectangle
+                x, y, w, h, area = rt
+                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                # rotate area 180 degree to get volume
+                radius = (w+h) // 4
+                obj_vol = (area * radius * radius * np.pi) // 2
+                volumes.append(obj_vol)
+            max_vol = np.max(volumes)
+            max_cnt = len(volumes)
+            max_spd = 0
             tracker.update(centers)
             obj_cnt = max(len(tracker.tracks), len(centers))
             if len(tracker.tracks) < config.max_detection:
@@ -177,12 +229,14 @@ def process_frame_loop(config: dict, main_loop_running_cb: function):
                             x2 = tracked_object.trace[j+1][0][0]
                             y2 = tracked_object.trace[j+1][1][0]
 
+                            #if y2 + MAX_MOVE_UP < y1:
+                            #    # is moving up, but moving up is not possible for falling object.
+                            #    continue
+
                             cv2.line(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 255), 2)
 
-                        trace_i = len(tracked_object.trace) - 1
-
-                        trace_x = tracked_object.trace[trace_i][0][0]
-                        trace_y = tracked_object.trace[trace_i][1][0]
+                        trace_x = tracked_object.trace[-1][0][0]
+                        trace_y = tracked_object.trace[-1][1][0]
 
                         # Check if tracked object has reached the speed detection line
                         load_lag = (datetime.utcnow() - frame_start_time).total_seconds()
@@ -190,16 +244,20 @@ def process_frame_loop(config: dict, main_loop_running_cb: function):
                         
                         tracked_object.speed = config.frame_dist_cm / time_dur
 
+                        max_spd = max(max_spd, tracked_object.speed)
 
-                    
                         # Display speed if available
                         cv2.putText(frame, "SPD: {} CM/s".format(round(tracked_object.speed, 2)), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
                         # cv2.putText(frame, 'ID: '+ str(tracked_object.track_id), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
-                    
+            rock_evt.max_vol = max_vol
+            rock_evt.max_speed = max_spd
+            rock_evt.max_count = max_cnt
+            rock_evt.ts_end = datetime.now().timestamp()
+
 
         # draw rock boundaries
-        cts = [np.array(p) for p in config.rock_boundaries if len(p) > 2]
-        cv2.drawContours(frame, cts, -1, (0, 0, 255), 2)
+        #cts = [np.array(p) for p in config.rock_boundaries if len(p) > 2]
+        #cv2.drawContours(frame, cts, -1, (0, 0, 255), 2)
 
 
         # Display all images
@@ -210,26 +268,22 @@ def process_frame_loop(config: dict, main_loop_running_cb: function):
         cv2.putText(frame, info_text, (87, 62), font, 2, (0, 0, 0), 2, cv2.LINE_AA)
         cv2.putText(frame, info_text, (85, 60), font, 2, (255, 255, 255), 2, cv2.LINE_AA)
 
-        # display alert !
-        if obj_cnt > 0:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            f_pim = Image.fromarray(frame)
-
-            frame = np.asarray(f_pim)
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
         fps_e = (1.0 / ((cv2.getTickCount() - fps_f) / cv2.getTickFrequency()))
         fps_e = round(fps_e)
 
-        frame_is_ready = False
-        _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
-        pushed_frame = cv2.imencode('.png', _frame)[1].tobytes()
-        frame_is_ready = True
-        #cv2.imshow("test", pushed_frame)
-        cv2.waitKey(1)
 
+        _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+        current_frame[:] = _frame[:]
+        try:
+            if out_queue.full():
+                out_queue.get()
+            out_queue.put(_frame)
+        except:
+            logging.error("out_queue failed to put frame")
+        
     # Clean up
-    model.release()
+    if model is not None:
+        model.release()
     video_src_ended = True
     if config.debug:
         print ("main_loop aborted.")
