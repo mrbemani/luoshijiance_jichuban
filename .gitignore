@@ -10,3 +10,6 @@ __pycache__
 *.mov
 *.avi
 *.webm
+*.csv
+thirdparty
+*.log

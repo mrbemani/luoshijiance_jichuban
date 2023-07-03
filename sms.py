@@ -87,7 +87,7 @@ class TSAlibabaSMS(object):
         max_count: int, 
         max_vol: int,
         max_speed: int,
-        template_code: str = 'SMS_461515241'
+        template_code: str = 'SMS_461865249'
     ) -> None:
         client = TSAlibabaSMS.create_client(os.environ['ALIBABA_CLOUD_ACCESS_KEY_ID'], os.environ['ALIBABA_CLOUD_ACCESS_KEY_SECRET'])
         dt_string = datetime.fromtimestamp(ts_start).strftime("%Y-%m-%d %H:%M:%S")
