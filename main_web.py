@@ -4,6 +4,7 @@ __author__ = 'Mr.Bemani'
 
 import sys
 import os
+import glob
 
 if getattr(sys, 'frozen', False):
     APP_BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
@@ -95,7 +96,7 @@ def send_assets(path):
 
 @app.route('/webui/')
 def webui():
-    last_n_alerts = load_event_log("events.csv", None)[:8]
+    last_n_alerts = load_event_log("events.csv", None)[:20]
     last_n_alerts = [(datetime.fromtimestamp(int(float(x[5]))), int(float(x[4])), int(float(x[1])), int(round(float(x[3]))), str(x[7])) for x in last_n_alerts]
     video_preview_url = "/video_preview"
     live_url = config.camera_web_url
@@ -129,7 +130,7 @@ def web_wait(seconds):
 
 @app.route('/api/terminate')
 def web_terminate():
-    yield "<script>window.location.href='/wait/10';</script>"
+    yield "<script>window.location.href='/wait/5';</script>"
     time.sleep(2)
     webserver.shutdown()
     webserver.server_close()
@@ -161,12 +162,15 @@ def get_record_video(record_id):
     record_base = os.path.join(config.output_dir, record_id)
     output_mp4 = os.path.join(record_base, "output.mp4")
     record_frames = os.path.join(record_base, r"*.jpg")
+    record_frame_count = len(glob.glob(record_frames))
+    if not os.path.exists(output_mp4) and record_frame_count < 1:
+        return jsonify({'status': 'error', 'message': 'No frame found'}), 404
     logging.debug(f"record_frames: {record_frames}")
     logging.debug(f"output_mp4: {output_mp4}")
     logging.debug(f"record_base: {record_base}")
     logging.debug(f"working dir: {os.getcwd()}")
     # combine jpegs into mp4 use ffmpeg
-    if not os.path.exists(output_mp4):
+    if not os.path.exists(output_mp4) and record_frame_count > 0:
         try:
             ffmpeg_subp = subp.getoutput(f"cd {os.getcwd()} && /usr/local/bin/ffmpeg -r 12 -f image2 -s 1280x720 -pattern_type glob -i \"{record_frames}\" -vcodec mpeg4 -pix_fmt yuv420p \"{output_mp4}\"")
             logging.debug(f"ffmpeg_subp: {ffmpeg_subp}")
@@ -176,6 +180,9 @@ def get_record_video(record_id):
             logging.exception("ffmpeg failed")
             return jsonify({"status": "error", "message": f"ffmpeg failed with: {traceback_msg}"}), 500
     if os.path.exists(output_mp4):
+        # remove all jpegs
+        if record_frame_count > 0:
+            os.system(f"cd {os.getcwd()} && rm -rf {record_frames}")
         file_resp = send_from_directory(record_base, "output.mp4")
         resp = make_response(file_resp)
         dt = datetime.fromtimestamp(int(record_id)//1000).strftime("%Y%m%d_%H%M%S")

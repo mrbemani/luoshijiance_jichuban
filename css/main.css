@@ -134,20 +134,29 @@ img#preview, .preview {
 
 .table tr {
     border-bottom: 1px solid #ccc;
+    cursor: pointer;
+}
+
+.table tr:hover {
+    background-color: #654 !important;
+    color: #fff !important;
 }
 
 .table th {
     border-bottom: 1px solid #ccc;
+    cursor: default;
 }
 
 .table tr > td {
     text-align: center;
     padding: 4px;
+    cursor: pointer;
 }
 
 .table tr > th {
     text-align: center;
     padding: 4px;
+    cursor: default;
 }
 
 .table.row-strided tr:nth-child(odd) {
@@ -184,3 +193,103 @@ img#preview, .preview {
 
 }
 
+@media screen and (min-width: 800px) {
+    body {
+        background-color: #222;
+        font-size: 12px;
+    }
+
+    .container {
+        min-width: 1020px;
+        max-width: 1020px;
+        display: flex;
+        text-align: center;
+        margin: auto;
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .section.info .title {
+        font-size: 16px;
+    }
+
+    .tags .tag {
+        font-size: 9px;
+    }
+
+    .section .info > .description {
+        font-size: 12px;
+    }
+
+    .description-item-content, .description-item-title {
+        font-size: 12px;
+        line-height: 200%;
+    }
+
+    .description > .description-item {
+        margin-bottom: 10px;
+    }
+
+    .section {
+        border: 1px solid #e1e1e1;
+        border-radius: 8px;
+        box-shadow: #222 2px 2px 2px;
+        background-color: #222;
+        color: #eee;
+    }
+
+    #info.section {
+        display: inline-block;
+        width: 22%;
+        text-align: left;
+        font-size: 12px;
+        padding: 15px;
+    }
+
+    #events.section {
+        display: block;
+        width: 100%;
+    }
+
+    a#preview-link {
+        display: inline-block;
+        width: 75%;
+        height: auto;
+        margin: 0;
+        padding: 15px;
+        text-decoration: none;
+        text-align: center;
+    }
+
+    a#preview-link > img#preview {
+        border-radius: 4px;
+        box-shadow: #666 0px 0px 8px;
+    }
+
+    .table {
+        color: #eee;
+    }
+    
+    .table tr {
+        border-bottom: 1px solid #ccc;
+        cursor: pointer;
+    }
+    
+    .table tr:hover {
+        background-color: #654 !important;
+        color: #fff !important;
+    }
+    
+    .table th {
+        border-bottom: 1px solid #222;
+        cursor: default;
+    }
+
+    .table.row-strided tr:nth-child(odd) {
+        background-color: #222;
+    }
+    
+    .table.row-strided tr:nth-child(even) {
+        background-color: #444;
+    }
+}

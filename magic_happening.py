@@ -13,6 +13,7 @@ import logging
 import copy
 from datetime import datetime
 from PIL import Image
+import cmath
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -71,7 +72,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         config.tracking.max_trace_length, 1)
 
     rock_evt = None
-
+    last_frame_ts = 0
     while main_loop_running_cb():
         fps_f = cv2.getTickCount()
 
@@ -253,7 +254,16 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                         load_lag = (datetime.utcnow() - frame_start_time).total_seconds()
                         time_dur = (datetime.utcnow() - tracked_object.start_time).total_seconds() - load_lag
                         
-                        tracked_object.speed = config.frame_dist_cm / time_dur
+                        dx = 0
+                        dy = 0
+                        if len(tracked_object.trace) >= 2:
+                            dx = trace_x - tracked_object.trace[-2][0][0]
+                            dy = trace_y - tracked_object.trace[-2][1][0]
+
+                        dx = dx * config.frame_dist_cm
+                        dy = dy * config.frame_dist_cm
+                        trace_dist = cmath.sqrt(dx*dx + dy*dy)
+                        tracked_object.speed = trace_dist / time_dur
 
                         max_spd = max(max_spd, tracked_object.speed)
 

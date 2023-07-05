@@ -22,7 +22,7 @@ tracking:
 video_src: rtsp://admin:nd12345678@10.168.1.108/
 camera_web_url: http://10.168.1.108/
 camera_id: "001"
-location: "边坡001"
+location: "边坡落石001"
 sms:
   enable: false
   phone: "13310227936"

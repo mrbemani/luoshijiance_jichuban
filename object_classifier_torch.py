@@ -5,20 +5,30 @@ __author__ = 'Mr.Bemani'
 import cv2 as cv
 import numpy as np
 
-try:
-    from rknnlite.api import RKNNLite
-except ImportError:
-    raise ImportError('Please install RKNNToolkit first.')
+from PIL import Image
+
+import torch
+import torchvision.transforms as transforms
+ 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+input_size = (224, 224)
+ 
+# Data transformations
+transform = transforms.Compose([
+    transforms.Resize(input_size),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
 
 
 # Load the RKNN model
 def load_rknn_model(model_path):
-    rknn = RKNNLite()
-    ret = rknn.load_rknn(model_path)
-    if ret != 0:
-        print('Failed to load the RKNN model.')
-        exit(-1)
-    rknn.init_runtime()
+    rknn = torch.load(model_path, map_location=device)
+    # add release method to rknn object
+    def release():
+        print ("fake model.release() for compatibility")
+    if not hasattr(rknn, 'release'):
+        rknn.release = release
     return rknn
 
 
@@ -44,7 +54,7 @@ def pad_image(image: np.ndarray) -> np.ndarray:
 
 
 # Preprocess the input image
-def preprocess_image(image: np.ndarray, input_size: tuple = (224, 224)) -> np.ndarray:
+def preprocess_image(image: np.ndarray, input_size: tuple = (224, 224)) -> torch.Tensor:
     if image is None:
         raise ValueError('The input image is None.')
     if len(image.shape) != 3:
@@ -52,13 +62,17 @@ def preprocess_image(image: np.ndarray, input_size: tuple = (224, 224)) -> np.nd
     h, w, c = image.shape
     if c != 3:
         raise ValueError('The input image must be a 3-channel image.')
+    sqr_image = None
     if h / w < 0.9 or h / w > 1.1:
-        image = pad_image(image)
-    if image.shape[0] != input_size[1] or image.shape[1] != input_size[0]:
-        image = cv.resize(image, input_size)  # Resize the image according to your model input size
-    image = np.float32(image)
-    image = np.transpose(image, (2, 0, 1))  # Change from HWC to CHW format
-    return image
+        sqr_image = pad_image(image)
+    else:
+        sqr_image = image
+    if sqr_image.shape[0] != input_size[1] or sqr_image.shape[1] != input_size[0]:
+        sqr_image = cv.resize(sqr_image, input_size)  # Resize the image according to your model input size
+    rgb_sqr_image = cv.cvtColor(sqr_image, cv.COLOR_BGR2RGB)
+    pil_image = Image.fromarray(rgb_sqr_image)
+    torch_image = transform(pil_image)
+    return torch_image
 
 
 # Postprocess the output results
@@ -71,10 +85,13 @@ def postprocess(output):
 
 # Run inference
 def run_inference(rknn_model, image, input_size=(224, 224)):
-    image = preprocess_image(image, input_size)
-    outputs = rknn_model.inference(inputs=[image])[0]
-    outputs = postprocess(outputs)
-    return outputs
+    torch_image = preprocess_image(image, input_size).to(device)
+    images = torch_image.unsqueeze(0)
+    # evaluate model
+    rknn_model.eval()
+    with torch.no_grad():
+        outputs = rknn_model(images)[0].cpu().numpy()
+        return postprocess(outputs)
 
 if __name__ == '__main__':
     import sys
@@ -85,13 +102,9 @@ if __name__ == '__main__':
     image = cv.imread(sys.argv[2])
 
     # Run inference
-    outputs = run_inference(rknn_model, image)[0]
-    top1 = np.argmax(outputs)
-    conf1 = outputs[top1]
+    outputs = run_inference(rknn_model, image)
 
-    # Print the result
     print (outputs)
-    print (top1+1, conf1)
 
     # Release the model
     rknn_model.release()
