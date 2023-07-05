@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>请稍等 ...</title>
+</head>
+<body>
+    <h3>请稍等 ... <span id="count-down">{{ seconds }}</span></h3>
+    <script>
+        let total_seconds = {{ seconds }};
+        // 倒计时
+        function countdown(seconds) {
+            let countdown_elem = document.getElementById("count-down");
+            countdown_elem.innerText = seconds;
+            if (seconds > 0) {
+                setTimeout(function() {
+                    countdown_elem.innerText = seconds - 1;
+                    countdown(seconds - 1);
+                }, 1000);
+            }
+        }
+        // 延迟 seconds, 然后重定向到目标页面
+        function delay_redirect(seconds, target_url) {
+            countdown(seconds);
+            setTimeout(function() {
+                window.location.href = target_url;
+            }, seconds * 1000);
+        }
+        delay_redirect(total_seconds, "{{ target_url }}");
+    </script>
+</body>
+</html>

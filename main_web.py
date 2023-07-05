@@ -4,12 +4,22 @@ __author__ = 'Mr.Bemani'
 
 import sys
 import os
+
+if getattr(sys, 'frozen', False):
+    APP_BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
+elif __file__:
+    APP_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+os.chdir(APP_BASE_DIR)
+webserver = None
+
 import time
 import shutil
 import threading
 from datetime import datetime
 import logging
 import multiprocessing as mp
+from typing import Union, Callable
 import queue
 import subprocess as subp
 
@@ -18,8 +28,8 @@ import cv2 as cv
 
 logging.basicConfig(
     level=logging.DEBUG, 
-    format='%(asctime)s %(levelname)s %(message)s') 
-    #filename='main_web.log', filemode='w')
+    format='%(asctime)s %(levelname)s %(message)s',
+    filename='main_web.log', filemode='a')
 
 
 def restart_program():
@@ -29,13 +39,20 @@ def restart_program():
     python = sys.executable
     os.execl(python, python, * sys.argv)
 
+def exit_program():
+    """Restarts the current program, with file objects and descriptors
+       cleanup
+    """
+    os._exit(0)
+
 
 ############################################################
 # set environment variables
 os.environ["PC_TEST"] = "1"
 ############################################################
 
-from flask import Flask, render_template, Response, request, jsonify, send_from_directory
+from flask import Flask, render_template, Response, request, jsonify, send_from_directory, make_response
+from werkzeug.serving import make_server
 
 from configure import config, loadConfig, saveConfig
 
@@ -43,11 +60,6 @@ from video import fetch_frame_loop, create_video_writer
 from magic_happening import process_frame_loop, PF_W, PF_H
 
 from event_utils import load_event_log
-
-if getattr(sys, 'frozen', False):
-    APP_BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
-elif __file__:
-    APP_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 current_frame = None
 
@@ -86,7 +98,8 @@ def webui():
     last_n_alerts = load_event_log("events.csv", None)[:8]
     last_n_alerts = [(datetime.fromtimestamp(int(float(x[5]))), int(float(x[4])), int(float(x[1])), int(round(float(x[3]))), str(x[7])) for x in last_n_alerts]
     video_preview_url = "/video_preview"
-    return render_template('index.tpl.html', alerts=last_n_alerts, video_preview_url=video_preview_url)
+    live_url = config.camera_web_url
+    return render_template('index.tpl.html', live_url=live_url, alerts=last_n_alerts, video_preview_url=video_preview_url)
 
 
 @app.route('/webui/live-adjust')
@@ -107,15 +120,33 @@ def live_adjust_update():
     return jsonify({'status': 'ok'}), 200
 
 
+@app.route('/wait/<int:seconds>')
+def web_wait(seconds):
+    # wait n seconds and href to querystring url
+    target_url = request.args.get('url', '/')
+    return render_template('wait.tpl.html', seconds=seconds, target_url=target_url)
+
+
+@app.route('/api/terminate')
+def web_terminate():
+    yield "<script>window.location.href='/wait/10';</script>"
+    time.sleep(2)
+    webserver.shutdown()
+    webserver.server_close()
+    exit_program()
+
+
 def gather_img():
     while True:
         time.sleep(1.0 / config.preview_fps)
+        encode_param = [int(cv.IMWRITE_JPEG_QUALITY), config.preview_quality]
+        pw, ph = config.preview_width, config.preview_height
         if current_frame is not None:
-            minifrm = cv.resize(current_frame, (PF_W, PF_H), interpolation=cv.INTER_NEAREST)
-            _, frame = cv.imencode('.jpg', minifrm)
+            minifrm = cv.resize(current_frame, (pw, ph), interpolation=cv.INTER_NEAREST)
+            _, frame = cv.imencode('.jpg', minifrm, encode_param)
         else:
-            img = np.zeros((PF_H, PF_W, 3), dtype=np.uint8)
-            _, frame = cv.imencode('.jpg', img)
+            img = np.zeros((ph, pw, 3), dtype=np.uint8)
+            _, frame = cv.imencode('.jpg', img, encode_param)
         yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame.tobytes() + b'\r\n')
 
 
@@ -130,12 +161,26 @@ def get_record_video(record_id):
     record_base = os.path.join(config.output_dir, record_id)
     output_mp4 = os.path.join(record_base, "output.mp4")
     record_frames = os.path.join(record_base, r"*.jpg")
+    logging.debug(f"record_frames: {record_frames}")
+    logging.debug(f"output_mp4: {output_mp4}")
+    logging.debug(f"record_base: {record_base}")
+    logging.debug(f"working dir: {os.getcwd()}")
     # combine jpegs into mp4 use ffmpeg
     if not os.path.exists(output_mp4):
-        ffmpeg_subp = subp.Popen(f"ffmpeg -r 12 -f image2 -s 1280x720 -pattern_type glob -i '{record_frames}' -vcodec libx264 -crf 12 -pix_fmt yuv420p {output_mp4}", shell=True)
-        ffmpeg_subp.wait()
+        try:
+            ffmpeg_subp = subp.getoutput(f"cd {os.getcwd()} && /usr/local/bin/ffmpeg -r 12 -f image2 -s 1280x720 -pattern_type glob -i \"{record_frames}\" -vcodec mpeg4 -pix_fmt yuv420p \"{output_mp4}\"")
+            logging.debug(f"ffmpeg_subp: {ffmpeg_subp}")
+        except:
+            os.system(f"cd {os.getcwd()} && rm -rf {output_mp4}")
+            traceback_msg = sys.exc_info()[2]
+            logging.exception("ffmpeg failed")
+            return jsonify({"status": "error", "message": f"ffmpeg failed with: {traceback_msg}"}), 500
     if os.path.exists(output_mp4):
-        return send_from_directory(record_base, "output.mp4")
+        file_resp = send_from_directory(record_base, "output.mp4")
+        resp = make_response(file_resp)
+        dt = datetime.fromtimestamp(int(record_id)//1000).strftime("%Y%m%d_%H%M%S")
+        resp.headers["Content-Disposition"] = f"attachment; filename={dt}.mp4"
+        return resp
     else:
         return jsonify({'status': 'error', 'message': 'Record not found'}), 404
 
@@ -186,11 +231,15 @@ if __name__ == '__main__':
     video_process_thread.setDaemon(True)
     video_process_thread.start()
 
-    # start web server
+    ############################################################
+    # start webserver
     try:
-        app.run(host='0.0.0.0', port=8080, debug=True)
+        logging.info('Starting webserver...')
+        webserver = make_server("0.0.0.0", 8080, app, threaded=True)
+        logging.info('Webserver started.')
+        webserver.serve_forever()
     except KeyboardInterrupt:
-        pass    
+        logging.info('KeyboardInterrupt, stopping...')
 
     print ("Application is Deinitializing...", end='', flush=True)
     main_loop_running = False

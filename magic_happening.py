@@ -3,7 +3,8 @@
 __author__ = "Mr.Bemani"
 
 import os
-
+from typing import Callable, Union
+import multiprocessing as mp
 import queue
 import cv2
 import numpy as np
@@ -40,7 +41,7 @@ original_frame = None
 video_src_ended = False
 
 
-def process_frame_loop(config: dict, main_loop_running_cb: callable, frame_queue: queue.Queue, out_queue: queue.Queue, current_frame: np.ndarray):
+def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue: Union[queue.Queue, mp.Queue], out_queue: queue.Queue, current_frame: np.ndarray):
     global original_frame, pushed_frame, video_src_ended
 
     model = objcls.load_rknn_model(config.rknn_model_path)
@@ -49,6 +50,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: callable, frame_queue
     roi_mask = None
     if config.roi_mask is not None and os.path.isfile(config.roi_mask) and config.roi_mask != "None":
         roi_mask = cv2.imread(config.roi_mask, cv2.IMREAD_GRAYSCALE)
+        roi_mask = cv2.resize(roi_mask, (config.tracking.det_w, config.tracking.det_h), interpolation=cv2.INTER_NEAREST)
 
     # Initial background subtractor and text font
     fgbg = cv2.createBackgroundSubtractorMOG2()
@@ -120,7 +122,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: callable, frame_queue
 
         avg_color = np.average(morph)
         if avg_color > 255//10:
-            logging.debug(f"Too much noise detected, skipping frame: {avg_color}")
+            #logging.debug(f"Too much noise detected, skipping frame: {avg_color}")
             _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
             current_frame[:] = _frame[:]
             try:
@@ -138,7 +140,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: callable, frame_queue
 
         # if too many objects detected, skip this frame
         if num_labels > config.tracking.max_object_count:
-            logging.debug(f"Too many movements detected, skipping frame: {num_labels}")
+            #logging.debug(f"Too many movements detected, skipping frame: {num_labels}")
             _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
             current_frame[:] = _frame[:]
             try:
@@ -161,24 +163,33 @@ def process_frame_loop(config: dict, main_loop_running_cb: callable, frame_queue
             if w / h > 2 or h / w > 2:
                 continue
 
+            if roi_mask is not None:
+                if not roi_mask[y+h//2, x+w//2] > 0:
+                    continue
+
             x = int(x * pf_ratio_w)
             y = int(y * pf_ratio_h)
             w = int(w * pf_ratio_w)
             h = int(h * pf_ratio_h)
 
-            if roi_mask is not None:
-                if not roi_mask[y+h//2, x+w//2] > 0:
-                    continue
-
-            if w >= blob_min_width_far and h >= blob_min_height_far:
+            if blob_max_width_near >= w >= blob_min_width_far and \
+                blob_max_height_near >= h >= blob_min_height_far:
                 max_wh = np.max([w, h])
-                max_x = x + max_wh
-                max_y = y + max_wh
+                old_max_wh = max_wh
+                if max_wh < 224:
+                    max_wh = 224
+                delta_xy = (max_wh - old_max_wh) // 2
+                _x1 = x - delta_xy
+                _y1 = y - delta_xy
+                _x1 = max(_x1, 0)
+                _y1 = max(_y1, 0)
+                max_x = _x1 + max_wh
+                max_y = _y1 + max_wh
                 if max_x >= original_w:
                     max_x = original_w - 1
                 if max_y >= original_h:
                     max_y = original_h - 1
-                patch = original_frame[y:max_y, x:max_x].copy()
+                patch = original_frame[_y1:max_y, _x1:max_x].copy()
                 if patch is None:
                     print ("---invalid patch---")
                 else:
@@ -188,7 +199,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: callable, frame_queue
                     outputs = objcls.run_inference(model, sqr_patch)[0]
                     obj_class_index = np.argmax(outputs) + 1
                     obj_class_confidence = outputs[obj_class_index-1]
-                    #cv2.imwrite(f"./tmp/patch_{str(i).zfill(4)}_{obj_class_index}_{int(obj_class_confidence * 100)}_{int(time.time()*1000)}.jpg", sqr_patch)
+                    cv2.imwrite(f"./tmp/patch_{str(i).zfill(4)}_{obj_class_index}_{int(obj_class_confidence * 100)}_{int(time.time()*1000)}.jpg", sqr_patch)
                     if obj_class_confidence < 0.7:
                         center = np.array ([[x+w/2], [y+h/2]])
                         centers.append(np.round(center))
@@ -211,8 +222,8 @@ def process_frame_loop(config: dict, main_loop_running_cb: callable, frame_queue
                 x, y, w, h, area = rt
                 cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
                 # rotate area 180 degree to get volume
-                radius = (w+h) // 4
-                obj_vol = (area * radius * radius * np.pi) // 2
+                radius = (w+h) // 2
+                obj_vol = w * h * radius * config.frame_dist_cm / 100.0
                 volumes.append(obj_vol)
             max_vol = np.max(volumes)
             max_cnt = len(volumes)
@@ -247,7 +258,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: callable, frame_queue
                         max_spd = max(max_spd, tracked_object.speed)
 
                         # Display speed if available
-                        cv2.putText(frame, "SPD: {} CM/s".format(round(tracked_object.speed, 2)), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
+                        # cv2.putText(frame, "SPD: {} CM/s".format(round(tracked_object.speed, 2)), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
                         # cv2.putText(frame, 'ID: '+ str(tracked_object.track_id), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
             rock_evt.max_vol = max_vol
             rock_evt.max_speed = max_spd

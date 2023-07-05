@@ -5,8 +5,11 @@ __author__ = 'Mr.Bemani'
 
 import os
 import time
-import queue
+from typing import Union
+from typing import Callable
 import cv2
+import queue
+import multiprocessing as mp
 from addict import Dict
 import numpy as np
 from datetime import datetime
@@ -29,17 +32,17 @@ def create_video_writer(fps=30, resolution=(1280, 720), video_dir="./videos"):
 
 
 # fetch frame from video source and put it into frame_queue
-def fetch_frame_loop(config: Dict, keep_running: callable, frame_put_queue: queue.Queue):
+def fetch_frame_loop(video_src: str, keep_running: Callable, frame_put_queue: Union[queue.Queue, mp.Queue]):
     # Capture livestream
-    logging.info("Initiating fetch_frame_loop with source: " + repr(config.video_src))
-    cap = cv2.VideoCapture (config.video_src)
+    logging.info("Initiating fetch_frame_loop with source: " + repr(video_src))
+    cap = cv2.VideoCapture (video_src)
     ret = True
     while keep_running():
         #time.sleep(0.0333333) # 30 fps
         ret, frame = cap.read()
         while not ret or frame is None: # try to reconnect forever
             cap.release()
-            cap = cv2.VideoCapture (config.video_src)
+            cap = cv2.VideoCapture (video_src)
             ret, frame = cap.read()
             if ret is None or frame is None:
                 time.sleep(0.5)

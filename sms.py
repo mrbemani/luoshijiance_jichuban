@@ -116,14 +116,16 @@ def send_sms(
 ) -> None:
     try:
         cfg = Dict(config)
+        if cfg.sms.enable is False:
+            return
         location = cfg.location
         phone_number = cfg.sms.phone
         sender_name = cfg.sms.sender
         ts_start = event.ts_start
         cam_no = cfg.camera_id
-        max_count = event.max_count
-        max_vol = event.max_vol
-        max_speed = event.max_speed
+        max_count = int(event.max_count)
+        max_vol = round(event.max_vol, 2)
+        max_speed = round(event.max_speed, 2)
         TSAlibabaSMS.sendSMS(
             location=location,
             phone_number=phone_number,

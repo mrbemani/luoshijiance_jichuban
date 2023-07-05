@@ -1,0 +1,14 @@
+#!/bin/bash
+### BEGIN INIT INFO
+# Provides:          run_server
+# Required-Start:    $remote_fs $syslog $network
+# Required-Stop:     $remote_fs $syslog $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Bird-Observation Server
+# Description:       Bird-Observation Server
+### END INIT INFO
+
+
+/home/firefly/main_server/run_server_forever &
+
