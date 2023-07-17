@@ -2,7 +2,9 @@
 
 __author__ = "Mr.Bemani"
 
+import sys
 import os
+import shutil
 from typing import Callable, Union
 import multiprocessing as mp
 import queue
@@ -13,7 +15,8 @@ import logging
 import copy
 from datetime import datetime
 from PIL import Image
-import cmath
+import math
+import threading
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -31,6 +34,7 @@ from tracker import Tracker
 
 from event_utils import create_falling_rock_event, store_event
 from sms import send_sms
+from video import make_video_ffmpeg
 
 PF_W = 1920
 PF_H = 1080
@@ -43,7 +47,7 @@ video_src_ended = False
 
 
 def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue: Union[queue.Queue, mp.Queue], out_queue: queue.Queue, current_frame: np.ndarray):
-    global original_frame, pushed_frame, video_src_ended
+    global original_frame, video_src_ended
 
     model = objcls.load_rknn_model(config.rknn_model_path)
 
@@ -77,10 +81,22 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         fps_f = cv2.getTickCount()
 
         ts_now = datetime.now().timestamp()
-        if rock_evt is not None and \
-           ts_now - rock_evt.ts_end > MAX_GAP_SECONDS:
-            store_event("events.csv", rock_evt)
-            send_sms(config, rock_evt)
+        if rock_evt is not None and ts_now - rock_evt.ts_end > MAX_GAP_SECONDS:
+            # too slow, discard event
+            if rock_evt.max_speed < 0.1:
+                logging.debug(f"Discarding event, too slow: {rock_evt.max_speed}")
+                shutil.rmtree(rock_evt.frame_dir)
+            else:
+                store_event("events.csv", rock_evt)
+                frame_files = [os.path.join(rock_evt.frame_dir, f) for f in os.listdir(rock_evt.frame_dir) if f.endswith(".jpg")]
+                try:
+                    if len(frame_files) > 1:
+                        make_video_thread = threading.Thread(target=make_video_ffmpeg, args=(str(rock_evt.record),))
+                        make_video_thread.start()
+                except:
+                    logging.error("Failed to run make_video thread")
+                    logging.error(f"{sys.exc_info()[0]}")
+                send_sms(config, rock_evt)
             rock_evt = None
 
         if rock_evt is not None:
@@ -89,7 +105,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                     wfrm = out_queue.get(timeout=0.1)
                     if wfrm is not None:
                         wfrm_fname = f"{int(datetime.now().timestamp()*1000)}.jpg"
-                        cv2.imwrite(os.path.join(rock_evt.frame_dir, wfrm_fname), wfrm)
+                        cv2.imwrite(os.path.join(rock_evt.frame_dir, wfrm_fname), wfrm, [cv2.IMWRITE_JPEG_QUALITY, 95])
                 except queue.Empty:
                     pass    
 
@@ -201,11 +217,11 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                     obj_class_index = np.argmax(outputs) + 1
                     obj_class_confidence = outputs[obj_class_index-1]
                     cv2.imwrite(f"./tmp/patch_{str(i).zfill(4)}_{obj_class_index}_{int(obj_class_confidence * 100)}_{int(time.time()*1000)}.jpg", sqr_patch)
-                    if obj_class_confidence < 0.7:
+                    if True: #if obj_class_index == 7 or obj_class_confidence < 0.6:
                         center = np.array ([[x+w/2], [y+h/2]])
                         centers.append(np.round(center))
                         obj_rects.append([x, y, w, h, area])
-            cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 255, 255), 2)
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 255), 2)
 
         obj_cnt = len(centers)
         if config.debug:
@@ -221,16 +237,16 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
             for rt in obj_rects:
                 # draw rectangle
                 x, y, w, h, area = rt
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 255), 2)
                 # rotate area 180 degree to get volume
                 radius = (w+h) // 2
                 obj_vol = w * h * radius * config.frame_dist_cm / 100.0
                 volumes.append(obj_vol)
             max_vol = np.max(volumes)
             max_cnt = len(volumes)
-            max_spd = 0
             tracker.update(centers)
             obj_cnt = max(len(tracker.tracks), len(centers))
+            obj_path_length = 0
             if len(tracker.tracks) < config.max_detection:
                 for tracked_object in tracker.tracks:
                     if len(tracked_object.trace) > 1:
@@ -241,38 +257,29 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                             x2 = tracked_object.trace[j+1][0][0]
                             y2 = tracked_object.trace[j+1][1][0]
 
-                            #if y2 + MAX_MOVE_UP < y1:
-                            #    # is moving up, but moving up is not possible for falling object.
-                            #    continue
-
                             cv2.line(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 255), 2)
 
                         trace_x = tracked_object.trace[-1][0][0]
                         trace_y = tracked_object.trace[-1][1][0]
 
+                        trace_x0 = tracked_object.trace[0][0][0]
+                        trace_y0 = tracked_object.trace[0][1][0]
+
+                        obj_path_length = math.sqrt((trace_x-trace_x0)**2 + (trace_y-trace_y0)**2)
+
                         # Check if tracked object has reached the speed detection line
                         load_lag = (datetime.utcnow() - frame_start_time).total_seconds()
                         time_dur = (datetime.utcnow() - tracked_object.start_time).total_seconds() - load_lag
-                        
-                        dx = 0
-                        dy = 0
-                        if len(tracked_object.trace) >= 2:
-                            dx = trace_x - tracked_object.trace[-2][0][0]
-                            dy = trace_y - tracked_object.trace[-2][1][0]
 
-                        dx = dx * config.frame_dist_cm
-                        dy = dy * config.frame_dist_cm
-                        trace_dist = cmath.sqrt(dx*dx + dy*dy)
-                        tracked_object.speed = trace_dist / time_dur
+                        tracked_object.speed = obj_path_length / time_dur
 
-                        max_spd = max(max_spd, tracked_object.speed)
+                        rock_evt.max_speed = max(rock_evt.max_speed, tracked_object.speed * config.frame_dist_cm / 100)
 
                         # Display speed if available
-                        # cv2.putText(frame, "SPD: {} CM/s".format(round(tracked_object.speed, 2)), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
+                        cv2.putText(frame, "SPD: {} CM/s".format(round(tracked_object.speed, 2)), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
                         # cv2.putText(frame, 'ID: '+ str(tracked_object.track_id), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
-            rock_evt.max_vol = max_vol
-            rock_evt.max_speed = max_spd
-            rock_evt.max_count = max_cnt
+            rock_evt.max_vol = max(rock_evt.max_vol, max_vol / 1_000_000)
+            rock_evt.max_count = max(rock_evt.max_count, max_cnt)
             rock_evt.ts_end = datetime.now().timestamp()
 
 

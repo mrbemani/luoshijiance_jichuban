@@ -19,23 +19,39 @@ import logging
 
 
 # write out video file as mp4
-def create_video_writer(fps=30, resolution=(1280, 720), video_dir="./videos"):
+def make_video_cv(in_image_files, video_dir, fps=30, resolution=(1280, 720), remove_images=True):
     if not os.path.isdir(video_dir):
         logging.error("video directory not found")
-        return None, 0
-    dtnow = datetime.now()
-    datetime_str = dtnow.strftime("%Y%m%d_%H%M%S")
-    filename = os.path.join(video_dir, datetime_str + ".mp4")
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    video_writer = cv2.VideoWriter(filename, fourcc, fps, resolution)
-    return video_writer, dtnow.timestamp()
+        return False
+    try:
+        mp4_file = os.path.join(video_dir, "output.mp4")
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        print (mp4_file)
+        video_writer = cv2.VideoWriter(mp4_file, fourcc, fps, resolution)
+        for image_file in in_image_files:
+            image = cv2.imread(image_file)
+            video_writer.write(image)
+            if remove_images:
+                os.unlink(image_file)
+        video_writer.release()
+        return True
+    except:
+        logging.error("error writing video file to: " + video_dir)
+        return False
+
+def make_video_ffmpeg(record_id):
+    try:
+        os.system(f"cd {os.getcwd()} && python3 ./ffmpeg_make_video.py {record_id}")
+        return True
+    except:
+        return False
 
 
 # fetch frame from video source and put it into frame_queue
 def fetch_frame_loop(video_src: str, keep_running: Callable, frame_put_queue: Union[queue.Queue, mp.Queue]):
     # Capture livestream
     logging.info("Initiating fetch_frame_loop with source: " + repr(video_src))
-    cap = cv2.VideoCapture (video_src)
+    cap = cv2.VideoCapture(video_src)
     ret = True
     while keep_running():
         #time.sleep(0.0333333) # 30 fps

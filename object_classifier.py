@@ -58,6 +58,7 @@ def preprocess_image(image: np.ndarray, input_size: tuple = (224, 224)) -> np.nd
         image = cv.resize(image, input_size)  # Resize the image according to your model input size
     image = np.float32(image)
     image = np.transpose(image, (2, 0, 1))  # Change from HWC to CHW format
+    image = np.expand_dims(image, axis=0)  # Add one dimension
     return image
 
 

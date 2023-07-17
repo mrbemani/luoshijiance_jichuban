@@ -2,23 +2,23 @@ debug: false
 frame_dist_cm: 1.0
 max_detection: 240
 output_dir: "./outputs"
-preview_fps: 2
-preview_quality: 30
-preview_width: 960
-preview_height: 540
+preview_fps: 3
+preview_quality: 80
+preview_width: 480
+preview_height: 272
 rknn_model_path: "./classifier.rknn"
 rock_boundaries: []
 roi_mask: "./mask.png"
 tracking:
-  det_w: 960
-  det_h: 540
-  dist_thresh: 40
-  max_object_count: 50
-  max_rock_pix: 300
+  det_w: 640
+  det_h: 360
+  dist_thresh: 10
+  max_object_count: 30
   max_rock_ratio: 2.5
   max_skip_frame: 2
   max_trace_length: 3
   min_rock_pix: 16
+  max_rock_pix: 300
 video_src: rtsp://admin:nd12345678@10.168.1.108/
 camera_web_url: http://10.168.1.108/
 camera_id: "001"

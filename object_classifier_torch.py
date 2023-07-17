@@ -90,7 +90,7 @@ def run_inference(rknn_model, image, input_size=(224, 224)):
     # evaluate model
     rknn_model.eval()
     with torch.no_grad():
-        outputs = rknn_model(images)[0].cpu().numpy()
+        outputs = rknn_model(images).cpu().numpy()
         return postprocess(outputs)
 
 if __name__ == '__main__':

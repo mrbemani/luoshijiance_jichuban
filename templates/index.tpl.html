@@ -40,13 +40,15 @@
         <div id="events" class="section">
             <table class="table row-strided">
                 <tr>
+                    <th>&nbsp;</th>
                     <th>事件时间</th>
                     <th>数量</th>
-                    <th>最大体积</th>
-                    <th>最大速度</th>
+                    <th>最大体积 (M<sup>3</sup>)</th>
+                    <th>最大速度 (M/s)</th>
                 </tr>
                 {% for event in alerts %}
                 <tr onclick="download_video('{{ event[4] }}')">
+                    <td>&#9654;</td>
                     <td>{{ event[0] }}</td>
                     <td>{{ event[1] }}</td>
                     <td>{{ event[2] }}</td>

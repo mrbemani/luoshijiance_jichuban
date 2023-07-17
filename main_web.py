@@ -24,6 +24,10 @@ from typing import Union, Callable
 import queue
 import subprocess as subp
 
+import json
+from addict import Dict
+from tsutil import zip_dir
+
 import numpy as np
 import cv2 as cv
 
@@ -49,7 +53,7 @@ def exit_program():
 
 ############################################################
 # set environment variables
-os.environ["PC_TEST"] = "1"
+os.environ["PC_TEST"] = "0"
 ############################################################
 
 from flask import Flask, render_template, Response, request, jsonify, send_from_directory, make_response
@@ -57,7 +61,7 @@ from werkzeug.serving import make_server
 
 from configure import config, loadConfig, saveConfig
 
-from video import fetch_frame_loop, create_video_writer
+from video import fetch_frame_loop
 from magic_happening import process_frame_loop, PF_W, PF_H
 
 from event_utils import load_event_log
@@ -97,7 +101,11 @@ def send_assets(path):
 @app.route('/webui/')
 def webui():
     last_n_alerts = load_event_log("events.csv", None)[:20]
-    last_n_alerts = [(datetime.fromtimestamp(int(float(x[5]))), int(float(x[4])), int(float(x[1])), int(round(float(x[3]))), str(x[7])) for x in last_n_alerts]
+    last_n_alerts = [(datetime.fromtimestamp(int(float(x[5]))), 
+                      int(float(x[4])), 
+                      round(float(x[1]), 3), 
+                      round(float(x[3]), 2), 
+                      str(x[7])) for x in last_n_alerts]
     video_preview_url = "/video_preview"
     live_url = config.camera_web_url
     return render_template('index.tpl.html', live_url=live_url, alerts=last_n_alerts, video_preview_url=video_preview_url)
@@ -137,6 +145,64 @@ def web_terminate():
     exit_program()
 
 
+@app.route('/api/get_dets')
+def api_get_dets():
+    try:
+        os.system("rm -rf /tmp/dets.zip")
+        zip_dir("./tmp", "/tmp/dets.zip", clear_dir=False)
+        return send_from_directory("/tmp/", "dets.zip", as_attachment=True)
+    except:
+        return jsonify({'status': 'error', 'message': 'failed to get dets'}), 500
+        
+
+@app.route('/webui/settings')
+def webui_settings():
+    _down_dict = config.to_dict()
+    return render_template('settings.tpl.html', **_down_dict)
+
+
+@app.route('/api/settings/update')
+def webapi_settings_update():
+    global config
+    if not request.json:
+        return jsonify({'status': 'error', 'message': 'Invalid request'}), 400
+
+    try:
+        _up_dict = Dict()
+        _up_dict.sms = Dict()
+        _up_dict.sms.enable = request.form.get('sms__enable', False)
+        _up_dict.sms.phone = request.form.get('sms__phone', '')
+        _up_dict.sms.sender = request.form.get('sms__sender', '')
+        
+        _up_dict.tracking = Dict()
+        _up_dict.tracking.det_w = request.form.get('det_w', 720)
+        _up_dict.tracking.det_h = request.form.get('det_h', 720)
+        _up_dict.tracking.dist_thresh = request.form.get('dist_thresh', 5)
+        _up_dict.tracking.max_object_count = request.form.get('max_object_count', 30)
+        _up_dict.tracking.max_skip_frame = request.form.get('max_skip_frame', 3)
+        _up_dict.tracking.max_trace_length = request.form.get('max_trace_length', 5)
+        _up_dict.tracking.min_rock_pix = request.form.get('min_rock_pix', 16)
+        _up_dict.tracking.max_rock_pix = request.form.get('max_rock_pix', 300)
+
+        _up_dict.debug = request.form.get('debug', False)
+        _up_dict.video_src = request.form.get('video_src', '')
+        _up_dict.camera_web_url = request.form.get('camera_web_url', '')
+        _up_dict.preview_fps = request.form.get('preview_fps', 10)
+        _up_dict.preview_width = request.form.get('preview_width', 320)
+        _up_dict.preview_height = request.form.get('preview_height', 180)
+        _up_dict.max_detection = request.form.get('max_detection', 240)
+    
+        config.update(_up_dict)
+        saveConfig("settings.yml")
+        yield "<script>window.location.href='/wait/5';</script>"
+        time.sleep(2)
+        webserver.shutdown()
+        webserver.server_close()
+        exit_program()
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    
+
 def gather_img():
     while True:
         time.sleep(1.0 / config.preview_fps)
@@ -163,33 +229,16 @@ def get_record_video(record_id):
     output_mp4 = os.path.join(record_base, "output.mp4")
     record_frames = os.path.join(record_base, r"*.jpg")
     record_frame_count = len(glob.glob(record_frames))
-    if not os.path.exists(output_mp4) and record_frame_count < 1:
-        return jsonify({'status': 'error', 'message': 'No frame found'}), 404
-    logging.debug(f"record_frames: {record_frames}")
-    logging.debug(f"output_mp4: {output_mp4}")
-    logging.debug(f"record_base: {record_base}")
-    logging.debug(f"working dir: {os.getcwd()}")
-    # combine jpegs into mp4 use ffmpeg
     if not os.path.exists(output_mp4) and record_frame_count > 0:
-        try:
-            ffmpeg_subp = subp.getoutput(f"cd {os.getcwd()} && /usr/local/bin/ffmpeg -r 12 -f image2 -s 1280x720 -pattern_type glob -i \"{record_frames}\" -vcodec mpeg4 -pix_fmt yuv420p \"{output_mp4}\"")
-            logging.debug(f"ffmpeg_subp: {ffmpeg_subp}")
-        except:
-            os.system(f"cd {os.getcwd()} && rm -rf {output_mp4}")
-            traceback_msg = sys.exc_info()[2]
-            logging.exception("ffmpeg failed")
-            return jsonify({"status": "error", "message": f"ffmpeg failed with: {traceback_msg}"}), 500
+        time.sleep(3)
     if os.path.exists(output_mp4):
-        # remove all jpegs
-        if record_frame_count > 0:
-            os.system(f"cd {os.getcwd()} && rm -rf {record_frames}")
         file_resp = send_from_directory(record_base, "output.mp4")
         resp = make_response(file_resp)
         dt = datetime.fromtimestamp(int(record_id)//1000).strftime("%Y%m%d_%H%M%S")
         resp.headers["Content-Disposition"] = f"attachment; filename={dt}.mp4"
         return resp
-    else:
-        return jsonify({'status': 'error', 'message': 'Record not found'}), 404
+    elif not os.path.exists(output_mp4):
+        return jsonify({'status': 'error', 'message': 'Video not ready'}), 404
 
 
 if __name__ == '__main__':
@@ -222,14 +271,14 @@ if __name__ == '__main__':
     current_frame = np.zeros((PF_H, PF_W, 3), dtype=np.uint8)
 
     # clear tmp dir
-    if os.path.exists("./tmp"):
-        shutil.rmtree("./tmp")
-    os.mkdir("./tmp")
+    if not os.path.exists("./tmp"):
+        #shutil.rmtree("./tmp")
+        os.mkdir("./tmp")
 
     main_loop_running = True
     
     # start video fetch loop
-    video_fetch_thread = threading.Thread(target=fetch_frame_loop, args=(config, main_loop_running_cb, frame_queue))
+    video_fetch_thread = threading.Thread(target=fetch_frame_loop, args=(config.video_src, main_loop_running_cb, frame_queue))
     video_fetch_thread.setDaemon(True)
     video_fetch_thread.start()
 
@@ -242,6 +291,7 @@ if __name__ == '__main__':
     # start webserver
     try:
         logging.info('Starting webserver...')
+        #app.run(host="0.0.0.0", port=8080, debug=config.debug, threaded=True)
         webserver = make_server("0.0.0.0", 8080, app, threaded=True)
         logging.info('Webserver started.')
         webserver.serve_forever()

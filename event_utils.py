@@ -28,6 +28,19 @@ def create_falling_rock_event():
     event.record = str(int(event.ts_start*1000))
     return event
 
+def load_event_object(evt_data: Union[list, tuple]):
+    event = Dict()
+    event.type = evt_data[0]
+    event.max_vol = float(evt_data[1])
+    event.total_vol = float(evt_data[2])
+    event.max_speed = float(evt_data[3])
+    event.max_count = int(evt_data[4])
+    event.ts_start = float(evt_data[5])
+    event.ts_end = float(evt_data[6])
+    event.record = evt_data[7]
+    event.trace_list = evt_data[8]
+    return event
+
 
 def fmt_event(event):
     event_fmt = []
