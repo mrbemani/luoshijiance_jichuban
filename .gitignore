@@ -14,3 +14,5 @@ __pycache__
 thirdparty
 *.log
 *.old
+*.pth
+*.onnx

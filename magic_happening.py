@@ -133,7 +133,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
 
         # Perform some Morphological operations to remove noise
         #thresh = cv2.threshold(fgmask, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
-    
+        
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
         morph = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel, iterations=2)
 
@@ -216,8 +216,11 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                     outputs = objcls.run_inference(model, sqr_patch)[0]
                     obj_class_index = np.argmax(outputs) + 1
                     obj_class_confidence = outputs[obj_class_index-1]
-                    cv2.imwrite(f"./tmp/patch_{str(i).zfill(4)}_{obj_class_index}_{int(obj_class_confidence * 100)}_{int(time.time()*1000)}.jpg", sqr_patch)
-                    if True: #if obj_class_index == 7 or obj_class_confidence < 0.6:
+                    if os.path.exists("/ssd_disk/dets"):
+                        cv2.imwrite(f"/ssd_disk/dets/patch_{int(time.time()*1000)}_{str(i).zfill(4)}_{obj_class_index}_{int(obj_class_confidence * 100)}.jpg", sqr_patch)
+                    else:
+                        cv2.imwrite(f"./tmp/patch_{int(time.time()*1000)}_{str(i).zfill(4)}_{obj_class_index}_{int(obj_class_confidence * 100)}.jpg", sqr_patch)
+                    if obj_class_index == 2 and obj_class_confidence > 0.93:
                         center = np.array ([[x+w/2], [y+h/2]])
                         centers.append(np.round(center))
                         obj_rects.append([x, y, w, h, area])
@@ -265,19 +268,17 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                         trace_x0 = tracked_object.trace[0][0][0]
                         trace_y0 = tracked_object.trace[0][1][0]
 
-                        obj_path_length = math.sqrt((trace_x-trace_x0)**2 + (trace_y-trace_y0)**2)
+                        if len(tracked_object.trace) > 2:
+                            obj_path_length = math.sqrt((trace_x-trace_x0)**2 + (trace_y-trace_y0)**2)
+                            # Check if tracked object has reached the speed detection line
+                            load_lag = (datetime.utcnow() - frame_start_time).total_seconds()
+                            time_dur = (datetime.utcnow() - tracked_object.start_time).total_seconds() - load_lag
+                            tracked_object.speed = obj_path_length / time_dur
+                            rock_evt.max_speed = max(rock_evt.max_speed, tracked_object.speed * config.frame_dist_cm / 100)
 
-                        # Check if tracked object has reached the speed detection line
-                        load_lag = (datetime.utcnow() - frame_start_time).total_seconds()
-                        time_dur = (datetime.utcnow() - tracked_object.start_time).total_seconds() - load_lag
-
-                        tracked_object.speed = obj_path_length / time_dur
-
-                        rock_evt.max_speed = max(rock_evt.max_speed, tracked_object.speed * config.frame_dist_cm / 100)
-
-                        # Display speed if available
-                        cv2.putText(frame, "SPD: {} CM/s".format(round(tracked_object.speed, 2)), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
-                        # cv2.putText(frame, 'ID: '+ str(tracked_object.track_id), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
+                            # Display speed if available
+                            cv2.putText(frame, "SPD: {} CM/s".format(round(tracked_object.speed, 2)), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
+                            # cv2.putText(frame, 'ID: '+ str(tracked_object.track_id), (int(trace_x), int(trace_y)), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
             rock_evt.max_vol = max(rock_evt.max_vol, max_vol / 1_000_000)
             rock_evt.max_count = max(rock_evt.max_count, max_cnt)
             rock_evt.ts_end = datetime.now().timestamp()

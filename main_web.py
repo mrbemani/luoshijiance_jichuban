@@ -98,6 +98,12 @@ def send_assets(path):
     return send_from_directory('assets', path)
 
 
+@app.route('/sys/solar')
+@app.route('/sys/solar/')
+def sys_solar():
+    return send_from_directory('/home/firefly/solar_energy_watcher', 'solar.html')
+
+
 @app.route('/webui/')
 def webui():
     last_n_alerts = load_event_log("events.csv", None)[:20]
@@ -149,7 +155,10 @@ def web_terminate():
 def api_get_dets():
     try:
         os.system("rm -rf /tmp/dets.zip")
-        zip_dir("./tmp", "/tmp/dets.zip", clear_dir=False)
+        if os.path.exists("/ssd_disk/dets"):
+            zip_dir("/ssd_disk/dets/", "/tmp/dets.zip", clear_dir=False)
+        else:
+            zip_dir("./tmp/", "/tmp/dets.zip", clear_dir=False)
         return send_from_directory("/tmp/", "dets.zip", as_attachment=True)
     except:
         return jsonify({'status': 'error', 'message': 'failed to get dets'}), 500
@@ -274,6 +283,9 @@ if __name__ == '__main__':
     if not os.path.exists("./tmp"):
         #shutil.rmtree("./tmp")
         os.mkdir("./tmp")
+
+    if os.path.exists("/ssd_disk") and not os.path.exists("/ssd_disk/dets"):
+        os.mkdir("/ssd_disk/dets")
 
     main_loop_running = True
     
