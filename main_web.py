@@ -104,6 +104,12 @@ def sys_solar():
     return send_from_directory('/home/firefly/solar_energy_watcher', 'solar.html')
 
 
+@app.route('/sys/temperature')
+@app.route('/sys/temperature/')
+def sys_temperature():
+    return send_from_directory('/home/firefly/temperature_watcher', 'temperature.html')
+
+
 @app.route('/webui/')
 def webui():
     last_n_alerts = load_event_log("events.csv", None)[:20]
@@ -115,24 +121,6 @@ def webui():
     video_preview_url = "/video_preview"
     live_url = config.camera_web_url
     return render_template('index.tpl.html', live_url=live_url, alerts=last_n_alerts, video_preview_url=video_preview_url)
-
-
-@app.route('/webui/live-adjust')
-def live_adjust():
-    return render_template('live_adjust.tpl.html', config=config.to_dict(), video_preview_url="/video_preview")
-
-
-@app.route('/api/live-adjust/update', methods=['POST'])
-def live_adjust_update():
-    global config
-    if not request.json:
-        return jsonify({'status': 'error', 'message': 'Invalid request'}), 400
-
-    config.update(request.json)
-    print (config)
-    saveConfig("settings.yml")
-    restart_program()
-    return jsonify({'status': 'ok'}), 200
 
 
 @app.route('/wait/<int:seconds>')
@@ -162,7 +150,13 @@ def api_get_dets():
         return send_from_directory("/tmp/", "dets.zip", as_attachment=True)
     except:
         return jsonify({'status': 'error', 'message': 'failed to get dets'}), 500
-        
+   
+
+@app.route('/api/manual_cutoff')
+def api_manual_cutoff():
+    config.manual_cutoff = not config.manual_cutoff
+    return ("1" if config.manual_cutoff else "0")
+
 
 @app.route('/webui/settings')
 def webui_settings():
@@ -276,6 +270,9 @@ if __name__ == '__main__':
     if not os.path.exists("events.csv"):
         with open("events.csv", "w") as f:
             pass
+
+    # manual cutoff for detection and tracking
+    config.manual_cutoff = False
 
     current_frame = np.zeros((PF_H, PF_W, 3), dtype=np.uint8)
 

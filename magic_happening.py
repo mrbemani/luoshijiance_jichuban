@@ -174,7 +174,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         for i in range(1, num_labels):
             x, y, w, h, area = stats[i]
 
-            if x < 10 or y < 10 or area < 100: # skip small objects (10x10 pixels)
+            if w < 10 or h < 10 or area < 100: # skip small objects (10x10 pixels)
                 continue
 
             if w / h > 2 or h / w > 2:
@@ -192,12 +192,17 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
             if blob_max_width_near >= w >= blob_min_width_far and \
                 blob_max_height_near >= h >= blob_min_height_far:
                 max_wh = np.max([w, h])
+                max_wh = max_wh * 1.2
+                """
                 old_max_wh = max_wh
                 if max_wh < 224:
                     max_wh = 224
                 delta_xy = (max_wh - old_max_wh) // 2
                 _x1 = x - delta_xy
                 _y1 = y - delta_xy
+                """
+                _x1 = (x - (w - max_wh) // 2)
+                _y1 = (y - (h - max_wh) // 2)
                 _x1 = max(_x1, 0)
                 _y1 = max(_y1, 0)
                 max_x = _x1 + max_wh
