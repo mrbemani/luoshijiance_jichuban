@@ -292,7 +292,8 @@ if __name__ == '__main__':
     video_fetch_thread.start()
 
     # start video processing loop
-    video_process_thread = threading.Thread(target=process_frame_loop, args=(config, main_loop_running_cb, frame_queue, out_queue, current_frame))
+    extra_info = Dict()
+    video_process_thread = threading.Thread(target=process_frame_loop, args=(config, main_loop_running_cb, frame_queue, out_queue, current_frame, extra_info))
     video_process_thread.setDaemon(True)
     video_process_thread.start()
 

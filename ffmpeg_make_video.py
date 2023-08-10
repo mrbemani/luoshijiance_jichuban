@@ -22,7 +22,7 @@ if __name__ == '__main__':
     if not os.path.exists(output_mp4) and record_frame_count >= 5:
         try:
             print ("processing: " + record_base)
-            ffmpeg_subp = subp.getoutput(f"cd /home/firefly/main_server && /usr/local/bin/ffmpeg -r 12 -f image2 -s 1920x1080 -pattern_type glob -i \"{record_frames}\" -vcodec mpeg4 -pix_fmt yuv420p \"{output_mp4}\"")
+            ffmpeg_subp = subp.getoutput(f"cd /home/firefly/main_server && /usr/local/bin/ffmpeg -r 12 -f image2 -s 1920x1080 -pattern_type glob -i \"{record_frames}\" -vcodec mpeg4 -q:v 1 -pix_fmt yuv420p \"{output_mp4}\"")
             print (f"ffmpeg_subp: {ffmpeg_subp}")
         except:
             os.system(f"cd {base_path} && rm -rf {output_mp4}")

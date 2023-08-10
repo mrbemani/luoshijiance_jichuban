@@ -1,3 +1,8 @@
+/**
+ * Kalman filter implementation by Mr.Bemani
+*/
+
+
 #include <stdio.h>
 #include <math.h>
 
@@ -88,6 +93,10 @@ void predict(Matrix *F, Vector *u, Matrix *P, Vector *lastResult)
     Matrix tempMatrix;
     Vector tempVector;
 
+    // Here we are calculating the predicted state
+    // by multiplying the state transition matrix by the previous state
+    // and adding the control vector
+    // x = Fx + u
     matrixMultiplication(F, u, &tempVector);
     vectorMultiplication(&tempVector, lastResult, &tempVector);
 
@@ -133,19 +142,79 @@ void correct(Matrix *A, Matrix *P, Matrix *R, Matrix *b, Vector *u, Vector *last
 
 int main()
 {
-    Matrix F = {1, 0, 0, 1};
-    Vector u = {0, 0};
-    Matrix P = {1, 0, 0, 1};
-    Vector lastResult = {0, 0};
+    // this is the state transition matrix
+    // it is a 2x2 matrix because we have 2 states
+    // in this case, the states are position and velocity
+    // the position is the first element of the vector
+    // the velocity is the second element of the vector
+    // the state transition matrix is the identity matrix
+    // because we assume that the position and velocity
+    // do not change over time
+    Matrix F = {1, 0, 0, 1}; 
 
+    // this is the control vector
+    // it is a 2x1 matrix because we have 2 states
+    // in this case, the states are position and velocity
+    // the position is the first element of the vector
+    // the velocity is the second element of the vector
+    Vector u = {0, 0};
+
+    // this is the covariance matrix
+    // it is a 2x2 matrix because we have 2 states
+    // in this case, the states are position and velocity
+    // the position is the first element of the vector
+    // the velocity is the second element of the vector
+    // the covariance matrix is the identity matrix
+    // because we assume that the position and velocity
+    // do not change over time
+    Matrix P = {1, 0, 0, 1};
+
+    // this is the last result
+    // it is a 2x1 matrix because we have 2 states
+    // in this case, the states are position and velocity
+    // the position is the first element of the vector
+    // the velocity is the second element of the vector
+    Vector lastResult = {0, 0}; // this is the last result
+
+    // this is the measurement matrix
+    // it is a 2x2 matrix because we have 2 states
+    // in this case, the states are position and velocity
+    // the position is the first element of the vector
+    // the velocity is the second element of the vector
+    // the measurement matrix is the identity matrix
+    // because we assume that the position and velocity
+    // do not change over time
     Matrix A = {1, 0, 0, 1};
+
+    // this is the measurement noise covariance matrix
+    // it is a 2x2 matrix because we have 2 states
+    // in this case, the states are position and velocity
+    // the position is the first element of the vector
+    // the velocity is the second element of the vector
+    // the measurement noise covariance matrix is the identity matrix
+    // because we assume that the position and velocity
+    // do not change over time
     Matrix R = {1, 0, 0, 1};
+
+    // this is the measurement vector
+    // it is a 2x1 matrix because we have 2 states
+    // in this case, the states are position and velocity
+    // the position is the first element of the vector
+    // the velocity is the second element of the vector
     Matrix b = {1, 1};
+
+    // this is the flag
+    // it is 0 if the measurement is the first one
+    // it is 1 if the measurement is not the first one
     int flag = 0;
 
+    // this is the prediction step
     predict(&F, &u, &P, &lastResult);
+
+    // this is the correction step
     correct(&A, &P, &R, &b, &u, &lastResult, flag);
 
+    // print out the result
     printVector(&lastResult);
 
     return 0;

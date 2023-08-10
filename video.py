@@ -64,7 +64,7 @@ def fetch_frame_loop(video_src: str, keep_running: Callable, frame_put_queue: Un
                 time.sleep(0.5)
                 continue
         try:
-            frame_put_queue.put(frame, timeout=0.03)
+            frame_put_queue.put(frame, timeout=0.05)
         except queue.Full:
             try:
                 frame_put_queue.get(timeout=0.1)

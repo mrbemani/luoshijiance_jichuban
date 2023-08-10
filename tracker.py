@@ -1,16 +1,17 @@
-'''
-    File name         : tracker.py
-    File Description  : Tracker Using Kalman Filter & Hungarian Algorithm
-    Author            : Srini Ananthakrishnan
-    Date created      : 07/14/2017
-    Date last modified: 07/16/2017
-    Python Version    : 2.7
-'''
+# -*- coding: utf-8 -*-
+# Tracker Using Hungarian Algorithm
+
+
+__author__ = 'Mr.Bemani'
 
 # Import python libraries
 import numpy as np
-from kalman_filter import KalmanFilter
-from scipy.optimize import linear_sum_assignment
+
+try:
+    from cupy.optimize import linear_sum_assignment
+except:
+    print ("no cupy, use scipy")
+    from scipy.optimize import linear_sum_assignment
 from datetime import datetime
 
 class Track(object):
@@ -28,7 +29,6 @@ class Track(object):
             None
         """
         self.track_id = trackIdCount  # identification of each track object
-        self.KF = KalmanFilter()  # KF instance to track this object
         self.prediction = np.asarray(prediction)  # predicted centroids (x,y)
         self.skipped_frames = 0  # number of frames skipped undetected
         self.trace = []  # trace path
@@ -61,7 +61,7 @@ class Tracker(object):
         self.tracks = []
         self.trackIdCount = trackIdCount
 
-    def update(self, detections, allow_moving_up=True):
+    def update(self, detections, allow_moving_up:bool=True, move_up_thresh:int=0):
         """Update tracks vector using following steps:
             - Create tracks if no tracks vector found
             - Calculate cost using sum of square distance
@@ -99,6 +99,15 @@ class Tracker(object):
                     distance = np.sqrt(diff[0]*diff[0] +
                                        diff[1]*diff[1])
                     cost[i][j] = distance
+                    # does not allow moving up
+                    if distance > self.dist_thresh:
+                        cost[i][j] = 1e4
+                    if not allow_moving_up and diff[1] > move_up_thresh:
+                        cost[i][j] = 1e4
+                    # check if the trace is moving up
+                    if len(self.tracks[i].trace) >= 3 and not allow_moving_up:
+                        if self.tracks[i].trace[-1][1][0] < detections[-3][1][0] - move_up_thresh:
+                            cost[i][j] = 1e4
                 except:
                     pass
 
@@ -107,8 +116,6 @@ class Tracker(object):
         # Using Hungarian Algorithm assign the correct detected measurements
         # to predicted tracks
         assignment = [-1 for _ in range(N)]
-        # for _ in range(N):
-        #     assignment.append(-1)
         row_ind, col_ind = linear_sum_assignment(cost)
         for i in range(len(row_ind)):
             assignment[row_ind[i]] = col_ind[i]
@@ -128,23 +135,15 @@ class Tracker(object):
 
         # If tracks are not detected for long time, remove them
         del_tracks = [i for i in range(len(self.tracks)) if self.tracks[i].skipped_frames > self.max_frames_to_skip]
-        # for i in range(len(self.tracks)):
-        #     if self.tracks[i].skipped_frames > self.max_frames_to_skip:
-        #         del_tracks.append(i)
         if len(del_tracks) > 0:  # only when skipped frame exceeds max
             for id in del_tracks:
                 if id < len(self.tracks):
                     del self.tracks[id]
                     del assignment[id]
-                #else:
-                    #print("ERROR: id is greater than length of tracks")
-
+        
         # Now look for un_assigned detects
         un_assigned_detects = [i for i in range(len(detections)) if i not in assignment]
-        # for i in range(len(detections)):
-        #         if i not in assignment:
-        #             un_assigned_detects.append(i)
-
+        
         # Start new tracks
         if len(un_assigned_detects) != 0:
             for i in range(len(un_assigned_detects)):
@@ -155,15 +154,9 @@ class Tracker(object):
 
         # Update KalmanFilter state, lastResults and tracks trace
         for i in range(len(assignment)):
-            self.tracks[i].KF.predict()
-
             if assignment[i] != -1:
                 self.tracks[i].skipped_frames = 0
-                self.tracks[i].prediction = self.tracks[i].KF.correct(
-                                            detections[assignment[i]], 1)
-            else:
-                self.tracks[i].prediction = self.tracks[i].KF.correct(
-                                            np.array([[0], [0]]), 0)
+                self.tracks[i].prediction = detections[assignment[i]]
 
             if len(self.tracks[i].trace) > self.max_trace_length:
                 for j in range(len(self.tracks[i].trace) -
@@ -171,4 +164,3 @@ class Tracker(object):
                     del self.tracks[i].trace[j]
 
             self.tracks[i].trace.append(self.tracks[i].prediction)
-            self.tracks[i].KF.lastResult = self.tracks[i].prediction

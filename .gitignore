@@ -16,3 +16,13 @@ thirdparty
 *.old
 *.pth
 *.onnx
+*.rknn
+*.json
+*.csv
+*.ipynb
+*.o
+*.so
+*.a
+*.dll
+*.exe
+mask.png

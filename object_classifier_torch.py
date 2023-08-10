@@ -11,6 +11,7 @@ import torch
 import torchvision.transforms as transforms
  
 device = "cuda" if torch.cuda.is_available() else "cpu"
+print ("device: " + device)
 input_size = (224, 224)
  
 # Data transformations

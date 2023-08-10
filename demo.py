@@ -12,7 +12,6 @@ elif __file__:
     APP_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 os.chdir(APP_BASE_DIR)
-webserver = None
 
 import time
 import shutil
@@ -30,9 +29,6 @@ from tsutil import zip_dir
 
 import numpy as np
 import cv2 as cv
-
-
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
 
 logging.basicConfig(
     level=logging.DEBUG, 
@@ -56,8 +52,9 @@ def exit_program():
 
 ############################################################
 # set environment variables
-os.environ["PC_TEST"] = "1"
+os.environ["PC_TEST"] = "0"
 ############################################################
+
 
 from configure import config, loadConfig, saveConfig
 
@@ -76,6 +73,20 @@ frame_queue = queue.Queue(2)
 out_queue = queue.Queue(50)
 
 
+def gather_img():
+    while True:
+        time.sleep(1.0 / config.preview_fps)
+        encode_param = [int(cv.IMWRITE_JPEG_QUALITY), config.preview_quality]
+        pw, ph = config.preview_width, config.preview_height
+        if current_frame is not None:
+            minifrm = cv.resize(current_frame, (pw, ph), interpolation=cv.INTER_NEAREST)
+            _, frame = cv.imencode('.jpg', minifrm, encode_param)
+        else:
+            img = np.zeros((ph, pw, 3), dtype=np.uint8)
+            _, frame = cv.imencode('.jpg', img, encode_param)
+        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame.tobytes() + b'\r\n')
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Rock detection and tracking')
@@ -92,13 +103,14 @@ if __name__ == '__main__':
     
     if args.video_src is not None and args.video_src != "":
         config.video_src = args.video_src
+        if args.video_src in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+            config.video_src = int(args.video_src)
 
     if args.output_dir is not None and args.output_dir != "":
         config.output_dir = args.output_dir
 
-    if os.path.exists(config.output_dir):#not os.path.exists(config.output_dir):
-        shutil.rmtree(config.output_dir)
-    os.makedirs(config.output_dir)
+    if not os.path.exists(config.output_dir):
+        os.makedirs(config.output_dir)
     
     if not os.path.exists("events.csv"):
         with open("events.csv", "w") as f:
@@ -107,11 +119,9 @@ if __name__ == '__main__':
     current_frame = np.zeros((PF_H, PF_W, 3), dtype=np.uint8)
 
     # clear tmp dir
-    if os.path.exists("./tmp"):#not os.path.exists("./tmp"):
-        shutil.rmtree("./tmp")
-    os.mkdir("./tmp")
-
-    
+    if not os.path.exists("./tmp"):
+        #shutil.rmtree("./tmp")
+        os.mkdir("./tmp")
 
     main_loop_running = True
     
@@ -120,42 +130,27 @@ if __name__ == '__main__':
     video_fetch_thread.setDaemon(True)
     video_fetch_thread.start()
 
-    # start video process loop
-    extra_info = Dict()
-    video_process_thread = threading.Thread(target=process_frame_loop, args=(config, main_loop_running_cb, frame_queue, out_queue, current_frame, extra_info))
+    # start video processing loop
+    video_process_thread = threading.Thread(target=process_frame_loop, args=(config, main_loop_running_cb, frame_queue, out_queue, current_frame))
     video_process_thread.setDaemon(True)
     video_process_thread.start()
-    
+
     ############################################################
-    # start gui loop
+    # start webserver
     try:
         while True:
-            if current_frame is None:
-                continue
-            ui_frame = cv.resize(current_frame, (960, 540))
-            cv.imshow("Rock Detection GUI Demo", ui_frame)
-            #if "gray" in extra_info:
-            #    cv.imshow("gray", extra_info.gray)
-            #if "fgmask" in extra_info:
-            #    cv.imshow("fgmask", extra_info.fgmask)
-            #if "morph" in extra_info:
-            #    cv.imshow("morph", extra_info.morph)
-            key = cv.waitKey(1)
-            if key == ord('q'):
+            cv.imshow("Falling Rock Detection Demonstration", current_frame)
+            if cv.waitKey(1) & 0xFF == ord('q'):
                 break
     except KeyboardInterrupt:
-        logging.info('KeyboardInterrupt, stopping...')
-    cv.destroyAllWindows()
+        pass
 
     print ("Application is Deinitializing...", end='', flush=True)
     main_loop_running = False
     time.sleep(0.5)
     video_fetch_thread.join(timeout=3)
     video_process_thread.join(timeout=3)
-    cv.destroyAllWindows()
 
-    json.dump(extra_info.objtracks, open("extra_info.json", "w"), indent=4)
-    
     print ("OK")
     if config.debug:
         print ("Server closed.")
