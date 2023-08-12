@@ -11,17 +11,18 @@ rock_boundaries: []
 roi_mask: "./mask.png"
 tracking:
   det_w: 720
-  det_h: 480
+  det_h: 720
   dist_thresh: 100
   max_object_count: 100
   max_rock_ratio: 3
   max_skip_frame: 2
   max_trace_length: 64
-  min_rock_pix: 8
+  min_rock_pix: 24
   max_rock_pix: 300
   allow_move_up: false
   move_up_thresh: 10
-video_src: "0"
+video_src: rtsp://admin:nd12345678@10.168.1.108/
+vcr_path: "/ssd_disk/vcr"
 camera_web_url: "javascript:void(0);"
 camera_id: "001"
 location: "边坡落石001"

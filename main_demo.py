@@ -73,7 +73,6 @@ def main_loop_running_cb():
     return main_loop_running
 
 frame_queue = queue.Queue(2)
-out_queue = queue.Queue(50)
 
 
 if __name__ == '__main__':
@@ -122,7 +121,7 @@ if __name__ == '__main__':
 
     # start video process loop
     extra_info = Dict()
-    video_process_thread = threading.Thread(target=process_frame_loop, args=(config, main_loop_running_cb, frame_queue, out_queue, current_frame, extra_info))
+    video_process_thread = threading.Thread(target=process_frame_loop, args=(config, main_loop_running_cb, frame_queue, current_frame, extra_info))
     video_process_thread.setDaemon(True)
     video_process_thread.start()
     

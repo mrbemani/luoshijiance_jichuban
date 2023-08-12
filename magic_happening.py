@@ -4,6 +4,7 @@ __author__ = "Mr.Bemani"
 
 import sys
 import os
+import json
 import shutil
 import random
 from typing import Callable, Union, List
@@ -12,13 +13,10 @@ import queue
 from addict import Dict
 import cv2
 import numpy as np
-import time
 import logging
-import copy
 from datetime import datetime
-from PIL import Image
 import math
-import threading
+import tsutil
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -42,13 +40,13 @@ PF_W = 1920
 PF_H = 1080
 
 MAX_MOVE_UP = 10
-MAX_GAP_SECONDS = 5
+MAX_GAP_SECONDS = 10
 
 original_frame = None
 video_src_ended = False
 
 
-def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue: Union[queue.Queue, mp.Queue], out_queue: queue.Queue, current_frame: np.ndarray, extra_info: Dict):
+def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue: Union[queue.Queue, mp.Queue], current_frame: np.ndarray, extra_info: Dict):
     global original_frame, video_src_ended
 
     model = objcls.load_rknn_model(config.rknn_model_path)
@@ -88,31 +86,19 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         ts_now = datetime.now().timestamp()
         if rock_evt is not None and ts_now - rock_evt.ts_end > MAX_GAP_SECONDS:
             # too slow, discard event
-            if rock_evt.max_speed < 0.1:
-                logging.debug(f"Discarding event, too slow: {rock_evt.max_speed}")
-                shutil.rmtree(rock_evt.frame_dir)
-            else:
+            #if rock_evt.max_speed < 0.1:
+            #    logging.debug(f"Discarding event, too slow: {rock_evt.max_speed}")
+            if True: # always save event
                 store_event("events.csv", rock_evt)
-                frame_files = [os.path.join(rock_evt.frame_dir, f) for f in os.listdir(rock_evt.frame_dir) if f.endswith(".jpg")]
-                try:
-                    if len(frame_files) > 1:
-                        make_video_thread = threading.Thread(target=make_video_ffmpeg, args=(str(rock_evt.record),))
-                        make_video_thread.start()
-                except:
-                    logging.error("Failed to run make_video thread")
-                    logging.error(f"{sys.exc_info()[0]}")
+                #### to-do select ffmpeg recorded file-range and copy to a distinct folder with timestamp as folder name.
+                selected_videos = tsutil.select_files_by_timestamp_range(config.vcr_path, rock_evt.ts_start - 4, rock_evt.ts_end + 4)
+                for sel_idx, sel_vid in enumerate(selected_videos):
+                    shutil.copy(sel_vid, rock_evt.frame_dir)
+                # save tracks
+                json.dump(objtracks, open(os.path.join(rock_evt.frame_dir, "trace.json"), "w"), indent=2)
                 #send_sms(config, rock_evt)
             rock_evt = None
-
-        if rock_evt is not None:
-            if not out_queue.empty():
-                try:
-                    wfrm = out_queue.get(timeout=0.005)
-                    if wfrm is not None:
-                        wfrm_fname = f"{int(datetime.now().timestamp()*1000)}.jpg"
-                        threading.Thread(target=cv2.imwrite, args=(os.path.join(rock_evt.frame_dir, wfrm_fname), wfrm, [cv2.IMWRITE_JPEG_QUALITY, 95])).start()
-                except queue.Empty:
-                    pass    
+        
 
         frame_start_time = datetime.utcnow()
         
@@ -153,24 +139,8 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         extra_info.avg_color = avg_color
         if avg_color > 255//80:
             #logging.debug(f"Too much noise detected, skipping frame: {avg_color}")
-            # draw objtracks
-            for oidx, ot in objtracks.items():
-                if len(ot) < 2 or len(ot[1]) < 1:
-                    continue
-                cr, xy = ot
-                for j in range(len(xy)-1):
-                    if j < 2:
-                        cv2.circle(frame, (int(xy[j][0]), int(xy[j][1])), 5, cr, -1)
-                    cv2.line(frame, (int(xy[j][0]), int(xy[j][1])), (int(xy[j+1][0]), int(xy[j+1][1])), cr, 2, cv2.LINE_AA)
             _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
             current_frame[:] = _frame[:]
-            try:
-                if out_queue.full():
-                    out_queue.get()
-                out_queue.put(_frame)
-            except:
-                logging.error("out_queue failed to put frame")
-            continue
 
         # apply connected components
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(morph, connectivity=8, ltype=cv2.CV_32S)
@@ -257,31 +227,12 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         obj_cnt = len(centers)
         objtrace.append(centers)
 
-        # draw objtracks
-        for oidx, ot in objtracks.items():
-            if len(ot) < 2 or len(ot[1]) < 1:
-                continue
-            cr, xy = ot
-            for j in range(len(xy)-1):
-                if j < 2:
-                    cv2.circle(frame, (int(xy[j][0]), int(xy[j][1])), 10, cr, -1)
-                else:
-                    cv2.circle(frame, (int(xy[j][0]), int(xy[j][1])), 6, cr, -1)
-                cv2.line(frame, (int(xy[j][0]), int(xy[j][1])), (int(xy[j+1][0]), int(xy[j+1][1])), cr, 2, cv2.LINE_AA)
-
+        
         # if too many objects detected, skip this frame
         if obj_cnt > config.max_detection:
             #logging.debug(f"Too many movements detected, skipping frame: {num_labels}")
             _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
             current_frame[:] = _frame[:]
-            try:
-                if out_queue.full():
-                    out_queue.get()
-                out_queue.put(_frame)
-            except:
-                logging.error("out_queue failed to put frame")
-            continue
-        
 
         if config.debug:
             if obj_cnt > 0:
@@ -292,14 +243,14 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                 rock_evt = create_falling_rock_event()
                 rock_evt.frame_dir = os.path.join(config.output_dir, str(int(rock_evt.ts_start*1000)))
                 os.makedirs(rock_evt.frame_dir, exist_ok=True)
+                objtracks.clear()
             volumes = []
             for rt in obj_rects:
                 # draw rectangle
                 x, y, w, h, area = rt
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 255, 0), 2)
                 # rotate area 180 degree to get volume
-                radius = (w+h) // 2
-                obj_vol = w * h * radius * config.frame_dist_cm / 100.0
+                depth_esti = (w+h) // 2
+                obj_vol = w * h * depth_esti * config.frame_dist_cm / 100.0
                 volumes.append(obj_vol)
             max_vol = np.max(volumes)
             max_cnt = len(volumes)
@@ -342,7 +293,8 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                             cv2.putText(frame, 'ID: '+ str(tracked_object.track_id), (int(trace_x), int(trace_y)), font, 3, (255, 255, 255), 2, cv2.LINE_AA)
                     if len(tracked_object.trace) > 0:
                         this_pt = [int(tracked_object.trace[-1][0][0]), int(tracked_object.trace[-1][1][0])]
-                        objtracks[tracked_object.track_id][1].append(this_pt)
+                        ts_this_pt = datetime.now().timestamp() - rock_evt.ts_start
+                        objtracks[tracked_object.track_id][1].append((ts_this_pt, this_pt))
                     
             rock_evt.max_vol = max(rock_evt.max_vol, max_vol / 1_000_000)
             rock_evt.max_count = max(rock_evt.max_count, max_cnt)
@@ -375,12 +327,6 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         cv2.putText(frame, "FPS: {}".format(fps_e), (87, 122), font, 2, (255, 255, 255), 2, cv2.LINE_AA)
         _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
         current_frame[:] = _frame[:]
-        try:
-            if out_queue.full():
-                out_queue.get()
-            out_queue.put(_frame)
-        except:
-            logging.error("out_queue failed to put frame")
 
     # Clean up
     if model is not None:

@@ -75,7 +75,6 @@ def main_loop_running_cb():
 app = Flask(__name__)
 
 frame_queue = queue.Queue(2)
-out_queue = queue.Queue(50)
 
 
 @app.route('/')
@@ -110,7 +109,8 @@ def sys_temperature():
     return send_from_directory('/home/firefly/temperature_watcher', 'temperature.html')
 
 
-@app.route('/webui/')
+#@app.route('/webui')
+#@app.route('/webui/')
 def webui():
     last_n_alerts = load_event_log("events.csv", None)[:20]
     last_n_alerts = [(datetime.fromtimestamp(int(float(x[5]))), 
@@ -293,7 +293,7 @@ if __name__ == '__main__':
 
     # start video processing loop
     extra_info = Dict()
-    video_process_thread = threading.Thread(target=process_frame_loop, args=(config, main_loop_running_cb, frame_queue, out_queue, current_frame, extra_info))
+    video_process_thread = threading.Thread(target=process_frame_loop, args=(config, main_loop_running_cb, frame_queue, current_frame, extra_info))
     video_process_thread.setDaemon(True)
     video_process_thread.start()
 
