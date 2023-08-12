@@ -6,7 +6,7 @@ preview_fps: 3
 preview_quality: 80
 preview_width: 480
 preview_height: 272
-rknn_model_path: "./image_classifier.pth" #"./classifier.rknn"
+rknn_model_path: "./classifier.rknn"
 rock_boundaries: []
 roi_mask: "./mask.png"
 tracking:
