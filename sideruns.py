@@ -32,7 +32,8 @@ def vcr_record_loop(vcr_path: str, video_src: str):
                         f"{vcr_path}/%s.mp4"]
         cmd_str = " ".join(command)
         ffmpeg_proc = subp.Popen(cmd_str, stdout=None, stderr=None, shell=True)
-        ffmpeg_proc.wait()
+        while ffmpeg_proc.poll() == None:
+            time.sleep(0.1)
         time.sleep(0.01)
 
 
@@ -41,7 +42,8 @@ def vcr_clean_loop(vcr_path, expire_minute: int = 10):
     while True:
         command_str = f"find {vcr_path} -type f -mmin +{expire_minute} -delete"
         clean_proc = subp.Popen(command_str, stdout=None, stderr=None, shell=True)
-        clean_proc.wait()
+        while clean_proc.poll() == None:
+            time.sleep(0.1)
         time.sleep(10)
 
 
@@ -63,6 +65,7 @@ def start_siderun_jobs(loop_running: Callable, video_src: str, vcr_path: str, ex
 
     print ("terminating...")
     vcr_record_proc.kill()
+    vcr_clean_proc.kill()
     vcr_record_proc.terminate()
     vcr_clean_proc.terminate()
     
