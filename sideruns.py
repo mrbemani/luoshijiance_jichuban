@@ -17,45 +17,52 @@ import subprocess as subp
 # /usr/bin/autossh -M 5678 -NR '*:8887:localhost:8080' http_tunnel@120.25.160.160
 
 # side run ffmpeg record loop
-def vcr_record_loop(loop_running: Callable, vcr_path: str, video_src: str):
-    while loop_running():
-        command_str = f"/usr/bin/ffmpeg -i \"{video_src}\" -c copy -map 0 -f segment -segment_time 5 -segment_format mp4 -reset_timestamps 0 -strftime 1 -segment_atclocktime 1 -segment_clocktime_offset 0 {vcr_path}/%s.mp4"
-        ffmpeg_proc = subp.Popen(command_str, shell=True)
+def vcr_record_loop(vcr_path: str, video_src: str):
+    while True:
+        ffmpeg_cmd = "/usr/bin/ffmpeg"
+        command = [ffmpeg_cmd,
+                        "-i", f"\"{video_src}\"",
+                        "-c", "copy", "-map", "0",
+                        "-f", "segment", "-segment_time", "5",
+                        "-segment_format", "mp4",
+                        "-reset_timestamps", "0",
+                        "-strftime", "1", 
+                        "-segment_atclocktime", "1",
+                        "-segment_clocktime_offset", "0",
+                        f"{vcr_path}/%s.mp4"]
+        cmd_str = " ".join(command)
+        ffmpeg_proc = subp.Popen(cmd_str, stdout=None, stderr=None, shell=True)
         ffmpeg_proc.wait()
         time.sleep(0.01)
 
 
 # side run clean loop
-def vcr_clean_loop(loop_running: Callable, vcr_path, expire_minute: int = 10):
-    while loop_running():
+def vcr_clean_loop(vcr_path, expire_minute: int = 10):
+    while True:
         command_str = f"find {vcr_path} -type f -mmin +{expire_minute} -delete"
-        os.system(command_str, shell=True)
-        time.sleep(expire_minute * 60)
+        clean_proc = subp.Popen(command_str, stdout=None, stderr=None, shell=True)
+        clean_proc.wait()
+        time.sleep(10)
 
 
 def start_siderun_jobs(loop_running: Callable, video_src: str, vcr_path: str, expire_minute: int = 10):
     # start subprocess
     vcr_record_proc = mp.Process(target=vcr_record_loop, 
-                         args=(loop_running, 
-                               vcr_path, 
+                         args=(vcr_path, 
                                video_src), daemon=True)
     vcr_record_proc.start()
     
     time.sleep(5)
 
     vcr_clean_proc = mp.Process(target=vcr_clean_loop,
-                         args=(loop_running, 
-                               vcr_path,
+                         args=(vcr_path,
                                expire_minute), daemon=True)
     vcr_clean_proc.start()
 
     time.sleep(10)
 
-
-    while loop_running():
-        time.sleep(1)
-
     print ("terminating...")
+    vcr_record_proc.kill()
     vcr_record_proc.terminate()
     vcr_clean_proc.terminate()
     
@@ -86,12 +93,11 @@ if __name__ == "__main__":
                         vcr_path,
                         expire_minute)
     
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        running = False
+    for i in range(30):
         time.sleep(1)
-        print("exit")
-        exit(0)
+        print (f"running {i}...")
+    running = False
+    time.sleep(3)
+    print("exit")
+    exit(0)
 
