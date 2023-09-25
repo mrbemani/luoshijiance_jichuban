@@ -223,7 +223,7 @@ def api_setup():
         config.roi_mask = request.json.get('roi_mask', './mask.png')
         config.green_max_ratio = request.json.get('green_max_ratio', 0.5)
         config.frame_dist_cm = request.json.get('frame_dist_cm', 10.0)
-        saveConfig("settings.yml")
+        ret = saveConfig("settings.yml")
         yield "<script>window.location.href='/wait/5';</script>"
         time.sleep(2)
         webserver.shutdown()
