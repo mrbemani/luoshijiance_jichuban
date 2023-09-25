@@ -1,8 +1,7 @@
 pyyaml
 pillow
-opencv-python
-opencv-contrib-python
-pysimplegui
+opencv-python-headless
+opencv-contrib-python-headless
 numpy
 scipy
 addict

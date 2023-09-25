@@ -57,12 +57,13 @@ def exit_program():
 ############################################################
 # set environment variables
 os.environ["PC_TEST"] = "1"
+os.environ["LAB_DEMO"] = "1"
 ############################################################
 
 from configure import config, loadConfig, saveConfig
 
 from video import fetch_frame_loop
-from magic_happening import process_frame_loop, PF_W, PF_H
+from magic_happening_lab_demo import process_frame_loop, PF_W, PF_H
 
 from event_utils import load_event_log
 
@@ -127,12 +128,16 @@ if __name__ == '__main__':
     
     ############################################################
     # start gui loop
+    win_name = "Rock Detection GUI Demo"
+    cv.namedWindow(win_name, cv.WND_PROP_FULLSCREEN)
+    cv.setWindowProperty(win_name, cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
+    cv.moveWindow(win_name, 0, 0)
     try:
         while True:
             if current_frame is None:
                 continue
-            ui_frame = cv.resize(current_frame, (960, 540))
-            cv.imshow("Rock Detection GUI Demo", ui_frame)
+            #ui_frame = cv.resize(current_frame, (960, 540))
+            cv.imshow(win_name, current_frame)
             #if "gray" in extra_info:
             #    cv.imshow("gray", extra_info.gray)
             #if "fgmask" in extra_info:

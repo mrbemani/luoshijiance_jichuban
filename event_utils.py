@@ -18,7 +18,6 @@ eventTypes = [
 def create_falling_rock_event():
     event = Dict()
     event.type = 'falling_rock'
-    event.trace_list = []
     event.max_vol = 0
     event.total_vol = 0
     event.max_speed = 0
@@ -38,7 +37,6 @@ def load_event_object(evt_data: Union[list, tuple]):
     event.ts_start = float(evt_data[5])
     event.ts_end = float(evt_data[6])
     event.record = evt_data[7]
-    event.trace_list = evt_data[8]
     return event
 
 
@@ -53,7 +51,6 @@ def fmt_event(event):
         event_fmt.append(event.ts_start)
         event_fmt.append(event.ts_end)
         event_fmt.append(event.record)
-        event_fmt.append(event.trace_list)
     else:
         event_fmt.append("unknown")
         event_fmt.append(0)
@@ -63,7 +60,6 @@ def fmt_event(event):
         event_fmt.append(datetime.now().timestamp())
         event_fmt.append(datetime.now().timestamp())
         event_fmt.append("")
-        event_fmt.append([])
     return event_fmt
 
 

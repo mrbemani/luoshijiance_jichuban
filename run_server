@@ -8,8 +8,10 @@
 # Short-Description: Bird-Observation Server
 # Description:       Bird-Observation Server
 ### END INIT INFO
-
-/home/firefly/main_server/start_ffmpeg_record_loop.sh &
-/home/firefly/main_server/clean_up_loop.sh &
+echo 1 > /sys/class/leds/ext_led2/brightness
+sleep 60
+/opt/main_server/start_ffmpeg_record_loop.sh &
+/opt/main_server/clean_up_loop.sh &
 sleep 5
-/home/firefly/main_server/run_server_forever &
+/opt/main_server/run_server_forever &
+

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 video_src="rtsp://admin:nd12345678@10.168.1.108/"
-dest_dir=/ssd_disk/vcr
+dest_dir="/opt/vcr"
 
 
 while true; do

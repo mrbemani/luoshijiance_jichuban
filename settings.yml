@@ -1,16 +1,15 @@
 debug: false
-frame_dist_cm: 1.0
-max_detection: 1000
+frame_dist_cm: 20.0
+max_detection: 500
 output_dir: "./outputs"
 preview_fps: 3
 preview_quality: 80
 preview_width: 480
 preview_height: 272
-rknn_model_path: "./classifier.rknn"
-rock_boundaries: []
 roi_mask: "./mask.png"
+green_max_ratio: 0.5 # max green ratio to determine if a patch is not plant
 tracking:
-  det_w: 720
+  det_w: 1280
   det_h: 720
   dist_thresh: 100
   max_object_count: 100
@@ -19,10 +18,14 @@ tracking:
   max_trace_length: 64
   min_rock_pix: 24
   max_rock_pix: 300
+  min_speed_threshold: 1.0 # m/s
+  min_y_motion: 0.1 # vertical portion of motion
+  min_y_x_ratio: 1.618 # y/x ratio
+  min_trace_length: 4 # min trace length to be considered as a rock
   allow_move_up: false
   move_up_thresh: 10
 video_src: rtsp://admin:nd12345678@10.168.1.108/
-vcr_path: "/ssd_disk/vcr"
+vcr_path: "/opt/vcr"
 camera_web_url: "javascript:void(0);"
 camera_id: "001"
 location: "边坡落石001"

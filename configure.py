@@ -4,9 +4,12 @@ __author__ = 'Mr.Bemani'
 
 
 import os
+import logging
+from typing import Optional
 from addict import Dict
 import yaml
 
+logging.basicConfig(level=logging.WARN)
 
 ############################################################
 # define default config settings
@@ -42,20 +45,19 @@ def loadConfig(cfgfile=None):
         config.update(yaml.load(open(cfgfile, 'r'), Loader=yaml.FullLoader))
         return True
     except Exception as e:
-        print (e)
+        logging.error(e)
     return False
 
 
-def saveConfig(cfgfile=None):
-    global config
+def saveConfig(config_obj: Dict, cfgfile: Optional[str]=None):
     if cfgfile is None:
         cfgfile = default_cfgfile
     if not os.path.isfile(cfgfile):
         return False
     try:
-        yaml.dump(config.to_dict(), open(cfgfile, 'w+'))
+        yaml.dump(config_obj.to_dict(), open(cfgfile, 'w+'))
         return True
     except Exception as e:
-        print (e)
+        logging.error(e)
     return False
 

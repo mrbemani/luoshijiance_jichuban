@@ -1,22 +1,7 @@
 #!/bin/bash
-### BEGIN INIT INFO
-# Provides:          run_server
-# Required-Start:    $remote_fs $syslog $network
-# Required-Stop:     $remote_fs $syslog $network
-# Default-Start:     2 3 4 5
-# Default-Stop:      0 1 6
-# Short-Description: Butterfly Illusion Server
-# Description:       Butterfly Illusion Server
-### END INIT INFO
-
-current_user=$(whoami)
 
 while true
 do
-	if [ $current_user=="firefly" ]; then
-		cd /home/firefly/main_server && python3 main_web.py
-	else
-		su - firefly -c 'cd /home/firefly/main_server && python3 main_web.py'
-	fi
+	cd /opt/main_server && python3 /opt/main_server/main_web.py
 done
 

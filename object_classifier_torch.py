@@ -24,7 +24,7 @@ transform = transforms.Compose([
 
 # Load the RKNN model
 def load_rknn_model(model_path):
-    rknn = torch.load(model_path, map_location=device)
+    rknn = torch.load(model_path).to(device)
     # add release method to rknn object
     def release():
         print ("fake model.release() for compatibility")
@@ -86,8 +86,8 @@ def postprocess(output):
 
 # Run inference
 def run_inference(rknn_model, image, input_size=(224, 224)):
-    torch_image = preprocess_image(image, input_size).to(device)
-    images = torch_image.unsqueeze(0)
+    torch_image = preprocess_image(image, input_size)
+    images = torch_image.unsqueeze(0).to(device)
     # evaluate model
     rknn_model.eval()
     with torch.no_grad():

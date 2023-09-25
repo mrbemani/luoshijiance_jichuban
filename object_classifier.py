@@ -26,10 +26,12 @@ def load_rknn_model(model_path):
 def pad_image(image: np.ndarray) -> np.ndarray:
     if image is None:
         raise ValueError('The input image is None.')
-    if len(image.shape) != 3:
-        raise ValueError('The input image must be a 3-channel image.')
+    if len(image.shape) != 3 and len(image.shape) != 2:
+        raise ValueError('The input image must be a (h, w, c) or (h, w) image.')
+    if len(image.shape) == 2:
+        image = cv.cvtColor(image, cv.COLOR_GRAY2BGR)
     if image.shape[2] != 3:
-        raise ValueError('The input image must be a 3-channel image.')
+        image = cv.cvtColor(image, cv.COLOR_GRAY2BGR)
     height, width = image.shape[0], image.shape[1]
     if height == width:
         return image

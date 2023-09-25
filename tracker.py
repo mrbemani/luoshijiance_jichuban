@@ -7,6 +7,24 @@ __author__ = 'Mr.Bemani'
 # Import python libraries
 import numpy as np
 
+
+# predict the next possible position based on past positions
+def predict_next_position(past_positions):
+    # Convert past positions to a numpy array
+    past_positions = np.array(past_positions)
+    
+    # Calculate the average displacement between consecutive positions
+    displacements = np.diff(past_positions, axis=0)
+    average_displacement = np.mean(displacements, axis=0)
+    
+    # Predict the next position by adding the average displacement to the last known position
+    last_position = past_positions[-1]
+    next_position = last_position + average_displacement
+    
+    return next_position
+
+
+# use cupy if possible
 try:
     from cupy.optimize import linear_sum_assignment
 except:
@@ -98,6 +116,7 @@ class Tracker(object):
                     diff = self.tracks[i].prediction - detections[j]
                     distance = np.sqrt(diff[0]*diff[0] +
                                        diff[1]*diff[1])
+                    
                     cost[i][j] = distance
                     # does not allow moving up
                     if distance > self.dist_thresh:
@@ -156,7 +175,13 @@ class Tracker(object):
         for i in range(len(assignment)):
             if assignment[i] != -1:
                 self.tracks[i].skipped_frames = 0
-                self.tracks[i].prediction = detections[assignment[i]]
+                if len(self.tracks[i].trace) > 1:
+                    # predict the next position by giving the last 2 positions
+                    next_pos = predict_next_position(self.tracks[i].trace[-2:])
+                    # assign to prediction
+                    self.tracks[i].prediction = next_pos
+                else:
+                    self.tracks[i].prediction = detections[assignment[i]]
 
             if len(self.tracks[i].trace) > self.max_trace_length:
                 for j in range(len(self.tracks[i].trace) -
