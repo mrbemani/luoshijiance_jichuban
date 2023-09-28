@@ -24,11 +24,16 @@ tracking:
   min_trace_length: 4 # min trace length to be considered as a rock
   allow_move_up: false
   move_up_thresh: 10
-video_src: rtsp://admin:nd12345678@10.168.1.108/
+video_src: rtsp://admin:nd12345678@10.168.1.100/
 vcr_path: "/opt/vcr"
 camera_web_url: "javascript:void(0);"
 camera_id: "001"
-location: "边坡落石001"
+location: "奉节县大树镇大树村4社"
+target_name: "柑子坪危岩一级专业监测"
+target_tags: ["危岩", "集中农户"]
+target_desc: "陡崖长约984m，分布23个危岩单体，单个危岩体积1.2～2350.7m3，总体积约7994.8m3，威胁刘家包居民集中区、汤家包居民集中区及柑子坪西侧居民区、X010县道及村级硬化公路过往车辆及行人安全。"
+target_range: 7994.8
+target_range_unit: "m3"
 sms:
   enable: false
   phone: "13310227936"

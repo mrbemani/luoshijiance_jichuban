@@ -5,6 +5,7 @@ __author__ = 'Mr.Bemani'
 import sys
 import os
 import glob
+import traceback
 
 if getattr(sys, 'frozen', False):
     APP_BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
@@ -63,7 +64,7 @@ from werkzeug.serving import make_server
 from configure import config, loadConfig, saveConfig
 
 from video import fetch_frame_loop
-from magic_happening import process_frame_loop, PF_W, PF_H
+from magic_happening import process_frame_loop, PF_W, PF_H, frame_update_time
 
 from event_utils import load_event_log
 
@@ -179,10 +180,6 @@ def webui_setup():
                            green_max_ratio=settings_obj['green_max_ratio'],
                            frame_dist_cm=settings_obj['frame_dist_cm'])
 
-    )
-
-
-
 
 @app.route('/api/setup', methods=['POST'])
 def api_setup():
@@ -239,15 +236,34 @@ def webui():
     if app_state == "setup":
         return "<script>window.location.href='/webui/setup';</script>"
     
-    last_n_alerts = load_event_log("events.csv", None)[:20]
-    last_n_alerts = [(datetime.fromtimestamp(int(float(x[5]))), 
-                      int(float(x[4])), 
-                      round(float(x[1]), 3), 
-                      round(float(x[3]), 2), 
-                      str(x[7])) for x in last_n_alerts]
+    last_n_alerts = []
+    try:
+        last_n_alerts = load_event_log("events.csv", None)[:20]
+        last_n_alerts = [(datetime.fromtimestamp(int(float(x[5]))), 
+                          int(float(x[4])), 
+                          round(float(x[1]), 3), 
+                          round(float(x[3]), 2), 
+                          str(x[7])) for x in last_n_alerts]
+    except:
+        # log traceback
+        logging.error(traceback.format_exc())
     video_preview_url = "/video_preview"
     live_url = config.camera_web_url
-    return render_template('index.tpl.html', live_url=live_url, alerts=last_n_alerts, video_preview_url=video_preview_url)
+    location = config.location
+    camera_id = config.camera_id
+    target_name = config.target_name
+    target_tags = config.target_tags
+    target_desc = config.target_desc
+    target_range = config.target_range
+    target_range_unit = config.target_range_unit
+    return render_template('index.tpl.html', 
+                           live_url=live_url, 
+                           alerts=last_n_alerts, 
+                           video_preview_url=video_preview_url,
+                           location=location, camera_id=camera_id,
+                           target_name=target_name, target_tags=target_tags,
+                           target_desc=target_desc, target_range=target_range,
+                           target_range_unit=target_range_unit)
 
 
 @app.route('/wait/<int:seconds>')

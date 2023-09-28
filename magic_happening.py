@@ -57,6 +57,8 @@ MAX_GAP_SECONDS = 5
 
 original_frame = None
 video_src_ended = False
+frame_update_time = datetime.utcnow().timestamp()
+bad_video_src = False
 
 
 def draw_object_tracks(frame: np.ndarray, objtracks: Dict):
@@ -98,7 +100,7 @@ def draw_plot_rock_count_change(frame: np.ndarray, rock_count: int):
 
 
 def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue: queue.Queue, current_frame: np.ndarray, extra_info: Dict):
-    global original_frame, video_src_ended
+    global original_frame, video_src_ended, frame_update_time, bad_video_src
 
     YOLO_SPAN = 3
     YOLO_NUM_CLASS = 80
@@ -188,7 +190,16 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
 
         frame_start_time = datetime.utcnow()
         
-        frame = frame_queue.get()
+        frame = None
+        try:
+            frame = frame_queue.get(timeout=10.0)
+        except queue.Empty:
+            logging.debug("frame_queue empty")
+            bad_video_src = True
+            logging.error("!!! Bad Video Source !!!")
+            logging.error("Restarting Program...")
+            os._exit(0)
+
         if frame is None:
             print ("frame is empty")
             continue
@@ -257,6 +268,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
             #logging.debug(f"Too much noise detected, skipping frame: {avg_color}")
             _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
             current_frame[:] = _frame[:]
+            frame_update_time = datetime.utcnow().timestamp()
             continue
 
         # apply connected components
@@ -344,6 +356,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
             #logging.debug(f"Too many movements detected, skipping frame: {num_labels}")
             _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
             current_frame[:] = _frame[:]
+            frame_update_time = datetime.utcnow().timestamp()
             continue
 
         if config.debug:
@@ -445,6 +458,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         #cv2.putText(frame, "FPS: {}".format(fps_e), (87, 122), font, 2, (255, 255, 255), 2, cv2.LINE_AA)
         _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
         current_frame[:] = _frame[:]
+        frame_update_time = datetime.utcnow().timestamp()
 
     # Clean up
     if rknn_det is not None:

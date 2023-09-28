@@ -15,25 +15,30 @@
         <div id="info" class="section info">
             <div class="title">监测对象概述</div>
             <ul class="tags">
-                <li class="tag gray">滑 坡</li>
+                {% for tag in target_tags %}
+                {% if tag == "危岩" %}
+                <li class="tag gray">{{ tag }}</li>
+                {% else %}
                 <li class="tag blue">分散农户</li>
+                {% endif %}
+                {% endfor %}
             </ul>
             <ul class="description">
                 <li class="description-item">
                     <span class="description-item-title">监测点名称</span>
-                    <span class="description-item-content">二等坡社</span>
+                    <span class="description-item-content">{{ target_name }}</span>
                 </li>
                 <li class="description-item">
                     <span class="description-item-title">地理位置</span>
-                    <span class="description-item-content">昭通市马龙村</span>
+                    <span class="description-item-content">{{ location }}</span>
                 </li>
                 <li class="description-item">
                     <span class="description-item-title">规模范围</span>
-                    <span class="description-item-content">15万m<sup>2</sup></span>
+                    <span class="description-item-content">{{ target_range }}{{ target_range_unit }}</sup></span>
                 </li>
                 <li class="description-item">
                     <span class="description-item-title">地质灾害现状和发展趋势简述</span>
-                    <span class="description-item-content">该点为浅层复合式中型滑坡，浅部地层以第四系残坡积今碎、块石粉质粘士为主，下部为二番系上统龙潭组(P11)砂岩，现状后缘一带局部小规模滑坡垮塌，裂缝发育。现状处于整体“推移+牵引”式蠕动变形阶段，总体欠稳定。危害等级为1级。</span>
+                    <span class="description-item-content">{{ target_desc }}</span>
                 </li>
             </ul>
         </div>

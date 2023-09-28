@@ -8,7 +8,7 @@ from typing import Callable
 import cv2
 import queue
 import logging
-
+from magic_happening import frame_update_time
 
 
 # fetch frame from video source and put it into frame_queue

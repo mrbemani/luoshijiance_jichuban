@@ -50,26 +50,28 @@ def vcr_clean_loop(vcr_path, expire_minute: int = 10):
 def start_siderun_jobs(loop_running: Callable, video_src: str, vcr_path: str, expire_minute: int = 10):
     # start subprocess
     vcr_record_proc = mp.Process(target=vcr_record_loop, 
-                         args=(vcr_path, 
-                               video_src), daemon=True)
+                                 args=(vcr_path, 
+                                 video_src), daemon=True)
     vcr_record_proc.start()
     
     time.sleep(5)
 
     vcr_clean_proc = mp.Process(target=vcr_clean_loop,
-                         args=(vcr_path,
-                               expire_minute), daemon=True)
+                                args=(vcr_path,
+                                expire_minute), daemon=True)
     vcr_clean_proc.start()
 
     time.sleep(10)
 
-    print ("terminating...")
+    print ("!!!!!!!!! killing...")
     vcr_record_proc.kill()
     vcr_clean_proc.kill()
+
+    print ("!!!!!!!!! terminating...")
     vcr_record_proc.terminate()
     vcr_clean_proc.terminate()
     
-    print ("joining...")
+    print ("!!!!!!!!! joining...")
     vcr_record_proc.join()
     vcr_clean_proc.join()
 

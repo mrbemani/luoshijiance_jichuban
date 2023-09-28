@@ -33,3 +33,4 @@ denoisenet/
 *.example.*
 *.service
 *.yml
+*.pdf
