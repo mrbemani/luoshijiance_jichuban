@@ -8,6 +8,7 @@ preview_width: 480
 preview_height: 272
 roi_mask: "./mask.png"
 green_max_ratio: 0.5 # max green ratio to determine if a patch is not plant
+max_event_duration: 180 # max time-length of an event in seconds
 tracking:
   det_w: 1280
   det_h: 720

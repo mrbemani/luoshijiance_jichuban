@@ -405,11 +405,14 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('--cfg', type=str, help='Config file path', default="settings.yml")
     parser.add_argument('-i', '--video_src', type=str, help='Video source')
-    parser.add_argument('-o', '--output_dir', type=str, help='Output video file basepath', default="outputs")
-    parser.add_argument('-v', '--vcr_dir', type=str, help='VCR directory', default="vcr")
+    parser.add_argument('-o', '--output_dir', type=str, help='Output video file basepath')
+    parser.add_argument('-v', '--vcr_dir', type=str, help='VCR directory')
     parser.add_argument('--port', type=int, help='Webserver port', default=8080)
     args = parser.parse_args()
 
+    if args.cfg is None or args.cfg == "":
+        args.cfg = os.path.join(APP_BASE_DIR, "settings.yml")
+    
     # load config
     has_config = loadConfig(args.cfg)
     if not has_config:

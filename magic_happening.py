@@ -145,7 +145,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         fps_f = cv2.getTickCount()
 
         ts_now = datetime.now().timestamp()
-        if rock_evt is not None and ts_now - rock_evt.ts_end > MAX_GAP_SECONDS:
+        if rock_evt is not None and (ts_now - rock_evt.ts_end > MAX_GAP_SECONDS or ts_now - rock_evt.ts_start > 180):
             # too slow, discard event
             if rock_evt.max_speed < config.tracking.min_speed_threshold:
                 logging.debug(f"Discarding event, too slow: {rock_evt.max_speed}")
