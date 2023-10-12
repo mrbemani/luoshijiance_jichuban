@@ -94,7 +94,7 @@ def get_mp4_list(path):
     return mp4_list
 
 def parse_trace_json(trace_json):
-    with open(trace_json, 'r') as f:
+    with open(trace_json, 'r', encoding="utf-8") as f:
         trace_obj = json.load(f)
     tracks = []
     for track_id, track_info in trace_obj.items():
@@ -155,7 +155,7 @@ def augment_record_video(record_id, fps=25, dim=(1920, 1080)):
             frame_idx += 1
         cap.release()
     augmented_writer.release()
-    with open(os.path.join('outputs', record_id, 'ok'), 'w') as okfp:
+    with open(os.path.join('outputs', record_id, 'ok'), 'w', encoding="utf-8") as okfp:
         okfp.write('1')
         okfp.flush()
         os.fsync(okfp.fileno())

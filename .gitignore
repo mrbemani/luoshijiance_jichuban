@@ -34,3 +34,5 @@ denoisenet/
 *.service
 *.yml
 *.pdf
+mask.png
+magic_happening_lab_demo.py

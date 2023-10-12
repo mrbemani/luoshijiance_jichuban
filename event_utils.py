@@ -66,7 +66,7 @@ def fmt_event(event):
 
 def load_event_log(eventlog: str, num_events: Optional[int] = 5):
     events = []
-    with open(eventlog, newline='') as f:
+    with open(eventlog, newline='', encoding="utf-8") as f:
         csv_reader = csv.reader(f, quotechar='"')
         if num_events is None:
             for row in csv_reader:
@@ -81,7 +81,7 @@ def load_event_log(eventlog: str, num_events: Optional[int] = 5):
 def store_event(eventlog_store: Union[io.TextIOWrapper, str], event: Dict):
     event_row = fmt_event(event)
     if type(eventlog_store) == str:
-        with open(eventlog_store, 'a', newline='') as f:
+        with open(eventlog_store, 'a', newline='', encoding="utf-8") as f:
             csv.writer(f, quotechar='"').writerow(event_row)
     elif type(eventlog_store) == io.TextIOWrapper:
         csv.writer(eventlog_store, quotechar='"').writerow(event_row)

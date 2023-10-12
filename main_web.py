@@ -414,13 +414,15 @@ if __name__ == '__main__':
         args.cfg = os.path.join(APP_BASE_DIR, "settings.yml")
     
     # load config
+    print (args.cfg)
     has_config = loadConfig(args.cfg)
+    print (config)
     if not has_config:
         app_state = "setup"
     
-    if app_state == "setup":
-        run_setup_loop()
-        exit_program()
+    #if app_state == "setup":
+    #    run_setup_loop()
+    #    exit_program()
     
 
     if args.debug is True:
@@ -435,12 +437,12 @@ if __name__ == '__main__':
     if args.vcr_dir is not None and args.vcr_dir != "":
         config.vcr_path = args.vcr_dir
 
-
+    print (config)
     if not os.path.exists(config.output_dir):
         os.makedirs(config.output_dir)
     
     if not os.path.exists("events.csv"):
-        with open("events.csv", "w") as f:
+        with open("events.csv", "w", encoding="utf-8") as f:
             f.write("")
             f.flush()
             pass

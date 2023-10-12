@@ -61,10 +61,12 @@ frame_update_time = datetime.utcnow().timestamp()
 bad_video_src = False
 
 
-def draw_object_tracks(frame: np.ndarray, objtracks: Dict):
+def draw_object_tracks(frame: np.ndarray, objtracks: Dict, min_trace_length=4):
     for track_id, track in objtracks.items():
         color = track[0]
         trace = track[1]
+        if len(trace) < min_trace_length:
+            continue
         for i in range(len(trace)-1):
             cv2.line(frame, trace[i][1], trace[i+1][1], color, 4)
         if len(trace) > 0:
@@ -73,29 +75,57 @@ def draw_object_tracks(frame: np.ndarray, objtracks: Dict):
 
 
 def format_info_text(rock_count=0, max_vol=0, max_speed=0, max_count=0):
-    info_text = "   --- 统计数据 ---"
-    info_text += "\n\n当前落石个数: {}".format(rock_count)
-    info_text += "\n\n最大体积: {} 立方米".format(round(max_vol, 2))
-    info_text += "\n\n最大速度: {} 米/秒".format(round(max_speed, 2))
-    info_text += "\n\n最大个数: {}".format(max_count)
+    info_text += "当前落石: {}".format(rock_count)
+    info_text += "\t|\t最大体积: {} 立方米".format(round(max_vol, 2))
+    info_text += "\t|\t最大速度: {} 米/秒".format(round(max_speed, 2))
+    info_text += "\t|\t最大个数: {}".format(max_count)
     return info_text
 
 
 rock_count_history = queue.Queue(maxsize=400)
-def draw_plot_rock_count_change(frame: np.ndarray, rock_count: int):
+def draw_plot_rock_count_change(frame: np.ndarray, rock_count: int, bottom_pos: int = 1079, magnify: int = 5):
     if rock_count_history.full():
         rock_count_history.get()
     rock_count_history.put(rock_count)
     if rock_count_history.qsize() < 2:
         return frame
     color = (0, 255, 255)
-    cv2.line(frame, (0, 400), (400, 400), color, 2)
+    cv2.line(frame, (0, bottom_pos), (400, bottom_pos), color, 2)
 
     for i in range(rock_count_history.qsize()-1):
-        pt1 = (i, 400 - rock_count_history.queue[i]*5)
-        pt2 = (i+1, 400 - rock_count_history.queue[i+1]*5)
+        pt1 = (i, bottom_pos - rock_count_history.queue[i]*magnify)
+        pt2 = (i+1, bottom_pos - rock_count_history.queue[i+1]*magnify)
         cv2.line(frame, pt1, pt2, color, 2)
     return frame
+
+
+def check_trace(object_trace, min_y_motion, min_y_x_ratio):
+    ts_now = datetime.now().timestamp()
+    if len(object_trace) == 0:
+        return True
+    if len(object_trace) == 1:
+        if ts_now - object_trace[0][0] < 1.2:
+            return True
+        else:
+            return False
+    last_point_ts = object_trace[-1][0]
+    if ts_now - last_point_ts < 1.2:
+        return True
+    if len(object_trace) < 4: # if trace length is less than 4, bad trace
+        return False
+    track_start_x = object_trace[0][1][0]
+    track_start_y = object_trace[0][1][1]
+    track_end_x = object_trace[-1][1][0]
+    track_end_y = object_trace[-1][1][1]
+    delta_x = max(0.00001, abs(track_end_x - track_start_x))
+    delta_y = track_end_y - track_start_y
+    # if y motion is less than downward 2 pixels, bad trace
+    if delta_y < min_y_motion * PF_H:
+        return False
+    # if y motion is less than config.min_y_x_ratio times x motion, bad trace
+    if delta_y / delta_x < min_y_x_ratio:
+        return False
+    return True
 
 
 
@@ -141,7 +171,6 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
     objtracks = dict()
     extra_info.objtracks = objtracks
     while main_loop_running_cb():
-        info_text = format_info_text()
         fps_f = cv2.getTickCount()
 
         ts_now = datetime.now().timestamp()
@@ -177,7 +206,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                     for sel_idx, sel_vid in enumerate(selected_videos):
                         shutil.copy(sel_vid, rock_evt.frame_dir)
                     # save tracks
-                    json.dump(valid_tracks, open(os.path.join(rock_evt.frame_dir, "trace.json"), "w"), indent=2)
+                    json.dump(valid_tracks, open(os.path.join(rock_evt.frame_dir, "trace.json"), "w", encoding="utf-8"), indent=2)
                     if USE_RKNN:
                         send_sms(config, rock_evt)
                     make_fuse_output(rock_evt.record)
@@ -425,27 +454,19 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                         this_pt = [int(tracked_object.trace[-1][0][0]), int(tracked_object.trace[-1][1][0])]
                         ts_this_pt = datetime.now().timestamp() - rock_evt.ts_start
                         objtracks[tracked_object.track_id][1].append((ts_this_pt, this_pt))
-                    
+
+            # filter out bad traces
+            good_objtracks = dict()
+            for obj_id in objtracks:
+                if check_trace(objtracks[obj_id][1], 
+                               config.tracking.min_y_motion, 
+                               config.tracking.min_y_x_ratio):
+                    good_objtracks[obj_id] = objtracks[obj_id]
+            
+            objtracks = good_objtracks
             rock_evt.max_vol = max(rock_evt.max_vol, max_vol / 1_000_000)
             rock_evt.max_count = max(rock_evt.max_count, max_cnt)
             rock_evt.ts_end = datetime.now().timestamp()
-
-        # Display all images
-        if rock_evt is not None:
-            info_text = format_info_text(obj_cnt, 
-                                         rock_evt.max_vol, 
-                                         rock_evt.max_speed, 
-                                         rock_evt.max_count)
-        else:
-            info_text = format_info_text(obj_cnt, 
-                                         0, 
-                                         0, 
-                                         0)
-
-        
-        frame = tsutil.draw_translucent_box(frame, (0, 0, 400, 400), (0, 0, 0), 0.618)
-
-        frame = tsutil.cv_put_text_zh(frame, info_text, (16, 30), (255, 255, 255), 30)
 
         frame = draw_object_tracks(frame, objtracks)
 

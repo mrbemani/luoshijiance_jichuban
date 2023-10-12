@@ -177,9 +177,9 @@ class Tracker(object):
                 self.tracks[i].skipped_frames = 0
                 if len(self.tracks[i].trace) > 1:
                     # predict the next position by giving the last 2 positions
-                    next_pos = predict_next_position(self.tracks[i].trace[-2:])
+                    # next_pos = predict_next_position(self.tracks[i].trace[-2:])
                     # assign to prediction
-                    self.tracks[i].prediction = next_pos
+                    self.tracks[i].prediction = detections[assignment[i]]
                 else:
                     self.tracks[i].prediction = detections[assignment[i]]
 

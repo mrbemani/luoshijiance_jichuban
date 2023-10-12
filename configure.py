@@ -42,7 +42,7 @@ def loadConfig(cfgfile=None):
     if not os.path.isfile(cfgfile):
         return False
     try:
-        config.update(yaml.load(open(cfgfile, 'r'), Loader=yaml.FullLoader))
+        config.update(yaml.load(open(cfgfile, 'r', encoding="utf-8"), Loader=yaml.FullLoader))
         return True
     except Exception as e:
         logging.error(e)
