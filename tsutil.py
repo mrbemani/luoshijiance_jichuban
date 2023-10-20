@@ -107,8 +107,8 @@ def is_mostly_green(image, threshold=0.5):
     if image is None:
         return True
     
-    print (type(image))
-    print (image.shape)
+    if image.shape[0] * image.shape[1] < 1:
+        return True
     # Convert the image to HSV color space
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
