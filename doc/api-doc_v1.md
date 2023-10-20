@@ -75,25 +75,25 @@ POST /api/v1/device/task
     "status": 1,        // 返回状态 1 为成功, 0 为失败
     "data": {
         "type": "update",   // 任务类型
-        "device_id": "device_unique_id_string",         // 返回发送的设备ID，用于确认 [必选]
+        "device_id": "device_unique_id_string",     // 返回发送的设备ID，用于确认 [必选]
         "data": {
             "device_location": "",                  // 设备位置 [可选]
             "device_description": "",               // 设备描述 [可选]
             "device_longitude": 0.0,                // 设备经度 [可选]
             "device_latitude": 0.0,                 // 设备纬度 [可选]
-            "frame_dist_cm": 10.0,                     // 画面单像素对应的实际尺寸CM [可选]
+            "frame_dist_cm": 10.0,                  // 画面单像素对应的实际尺寸CM [可选]
             "roi_mask_image_data": "base64 png image data",    // ROI Mask 数据 BASE64 编码，图片必须是单通道二值化黑白PNG图片格式。白色区域为观察区。黑色区域为非观察区。[可选]
             "video_src": "rtsp://www.example.com/video.mp4",   // 视频源地址 [可选]
             "vcr_path": "/path/to/vcr",             // VCR 路径 [可选]
             "dist_thresh": 100,                     // 最大跟踪距离搜索阈值 [可选]
-            "max_trace_length": 64,                  // 最大轨迹节点数 [可选]
+            "max_trace_length": 64,                 // 最大轨迹节点数 [可选]
             "max_skip_frames": 10,                  // 最大跟踪跳帧数 [可选]
             "min_rock_pix": 100,                    // 最小落石像素面积 [可选]
             "max_rock_pix": 1000,                   // 最大落石像素面积 [可选]
             "min_rock_speed": 1.0,                  // 最小落石速度 M/s [可选]
-            "min_y_frame_motion": 0.1,               // 最小垂直位移像素距离 / 帧图像纵向分辨率。举例: 假设画面为1920x1080像素，Y方向向下位移100像素为 100/1080. [可选]
+            "min_y_frame_motion": 0.1,              // 最小垂直位移像素距离 / 帧图像纵向分辨率。举例: 假设画面为1920x1080像素，Y方向向下位移100像素为 100/1080. [可选]
             "min_y_x_ratio": 0.1,                   // 最小垂直位移像素距离 / 水平位移像素距离。举例: 假设画面为1920x1080像素，Y方向向下位移100像素，X方向向右位移10像素，那么dY/dX = 100/10 = 10. [可选]
-            "min_trace_length": 4,                 // 最小轨迹节点数 [可选]
+            "min_trace_length": 4,                  // 最小轨迹节点数 [可选]
             "max_object_count": 100,                // 最大同时掉落个数 [可选]
             "surface_change_min_magnitude": 0.5,    // 最小表面变化位移阈值 (像素，可设置为亚像素，比如: 0.7, 3.2 等值) [可选]
             "surface_change_preprocess_gaussian_kernel_size": 3, // 表面变化预处理高斯模糊核大小 [可选]
@@ -144,7 +144,7 @@ POST /api/v1/device/heartbeat
     "device_acceleration": 0.0,                     // 设备加速度 [如果设备有加速度传感器]
     "device_speed": 0.0,                            // 设备速度 [如果设备有速度传感器]
     "device_direction": 0.0,                        // 设备方向 [如果设备有GPS信息]
-    "device_time": "2019-01-01 00:00:00",           // 设备当前系统时间
+    "device_time": "2019-01-01T00:00:00",           // 设备当前系统时间
     "frame_url": "http://www.example.com/frame.jpg" // 设备当前画面URL [无画面时为 null]
 }
 ```
@@ -202,7 +202,7 @@ POST /api/v1/event/add
         "max_volumn": 3.2, // 最大落石体积 m^3
         "max_speed": 4.1, // 最大掉落运动速度 m/s
         "video_url": "http://www.example.com/video.mp4", // 事件视频地址
-        "video_expire": "2019-01-01 08:01:00", // 事件视频过期时间
+        "video_expire": "2019-01-01T08:01:00", // 事件视频过期时间
     }
 }
 ```

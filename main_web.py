@@ -380,6 +380,27 @@ def video_preview():
     return Response(minifrm, mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
+@app.route('/video/get_frame')
+def get_frame():
+    # current frame
+    encode_param = [int(cv.IMWRITE_JPEG_QUALITY), config.preview_quality]
+    pw, ph = 1920, 1080
+    if current_frame is not None:
+        minifrm = cv.resize(current_frame, (pw, ph), interpolation=cv.INTER_NEAREST)
+        _, jpgframe = cv.imencode('.jpg', minifrm, encode_param)
+        return Response(jpgframe.tobytes(), mimetype='image/jpeg')
+    else:
+        img = np.zeros((ph, pw, 3), dtype=np.uint8)
+        cx = pw // 2
+        cy = ph // 2
+        ## put white color text "No Image" in the center of this black empty frame
+        cv.putText(img, "No Image", (cx - 100, cy), 
+                   cv.FONT_HERSHEY_SIMPLEX, 1.5, 
+                   (255, 255, 255), 2)
+        _, jpgframe = cv.imencode('.jpg', img, encode_param)
+        return Response(jpgframe.tobytes(), mimetype='image/jpeg')
+    
+
 @app.route('/get_record_video/<record_id>')
 def get_record_video(record_id):
     record_base = os.path.join(config.output_dir, record_id)

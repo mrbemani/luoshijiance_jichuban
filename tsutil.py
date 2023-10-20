@@ -104,9 +104,6 @@ def select_files_by_timestamp_range(folder_path: str, ts_start: int, ts_end: int
 
 
 def is_mostly_green(image, threshold=0.5):
-
-    logging.info("is_mostly_green", image.shape)
-
     if image is None:
         return True
     # Convert the image to HSV color space
