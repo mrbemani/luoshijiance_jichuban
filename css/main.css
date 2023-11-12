@@ -47,6 +47,22 @@ img#preview, .preview {
     text-align: center;
 }
 
+#imageContainer {
+    display: flex;
+    width: 100%;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    text-decoration: none;
+    text-align: center;
+    height: auto; /* Set a specific height */
+    background-color: black; /* Black background */
+    position: relative; /* Use relative positioning for parent */
+    justify-content: center;
+    padding: 15px;
+    align-items: center;
+}
+
 .section {
     width: calc(100% - 20px);
     margin: 10px;
@@ -264,6 +280,16 @@ img#preview, .preview {
     a#preview-link > img#preview {
         border-radius: 4px;
         box-shadow: #666 0px 0px 8px;
+    }
+
+    #imageContainer {
+        display: flex;
+        width: 75%;
+        height: auto;
+        margin: 0;
+        padding: 0;
+        text-decoration: none;
+        text-align: center;
     }
 
     .table {

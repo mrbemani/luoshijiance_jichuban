@@ -6,12 +6,76 @@
     <title>危岩落石智能监测系统</title>
     <!-- css urls -->
     <link rel="stylesheet" href="/css/main.css">
+    <style>
+        #imageContainer {
+          color: white; /* White text color */
+          font-size: 24px; /* Large font size for visibility */
+          font-family: Arial, sans-serif; /* Font family for text */
+        }
+        #dynamicImage {
+          width: 100%; /* Full width of the container */
+          height: 100%; /* Full height of the container */
+        }
+        .error-message {
+          display: none;
+          position: absolute;
+        }
+    </style>
     <!-- js urls -->
     <script src="/js/main.js"></script>
+    <script>
+        function loadImage() {
+          var timestamp = new Date().getTime();
+          var img = document.getElementById('dynamicImage');
+          var errorMessage = document.getElementById('errorMessage');
+          var serverUrl = '/video/get_frame'; // Replace with your server's image endpoint
+        
+          // Hide error message when trying to load a new image
+          errorMessage.style.display = 'none';
+        
+          // Attempt to load a new image
+          img.src = `${serverUrl}?t=${timestamp}`;
+        }
+        
+        function toggle_motion_map() {
+            var img = document.createElement('img');
+            var serverUrl = '/video/toggle_motion_map'; // Replace with your server's image endpoint
+            img.src = `${serverUrl}`;
+        }
+
+        function init() {
+          var img = document.getElementById('dynamicImage');
+          var errorMessage = document.getElementById('errorMessage');
+        
+          img.onload = function() {
+            // Load a new image when the current one has finished loading
+            loadImage();
+          };
+        
+          img.onerror = function() {
+            // If an error occurs, display the error message
+            errorMessage.style.display = 'block';
+            // Remove the src attribute since the image failed to load
+            img.style.display = 'none';
+            loadImage();
+          };
+        
+          // Start the process by loading the first image
+          loadImage();
+        }
+        
+        window.onload = init;
+    </script>
 </head>
 <body>
     <div class="container">
-        <a id="preview-link" href="{{ live_url }}"><img src="{{ video_preview_url }}" class="preview" id="preview" alt="preview"></a>
+        <!-- Container for the image and error message -->
+        <div id="imageContainer">
+            <!-- The image element where the dynamic image will be shown -->
+            <img id="dynamicImage" alt="Dynamic Image" ondblclick="toggle_motion_map()">
+            <!-- The error message that will be displayed when the image fails to load -->
+            <div id="errorMessage" class="error-message">Video Error</div>
+        </div>
         <div id="info" class="section info">
             <div class="title">监测对象概述</div>
             <ul class="tags">

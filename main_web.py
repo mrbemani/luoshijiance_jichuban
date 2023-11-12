@@ -111,13 +111,17 @@ def sys_temperature():
     return send_from_directory('/opt/sys/temperature_watcher', 'temperature.html')
 
 
+@app.route('/video/toggle_motion_map')
+def toggle_motion_map():
+    config.show_motion_map = not config.show_motion_map
+    return ("1" if config.show_motion_map else "0")
+
 @app.route('/webui/setup', methods=['GET'])
 @app.route('/webui/setup/', methods=['GET'])
 def webui_setup():
     settings_obj = dict(debug=False, 
                         video_src="",
                         camera_web_url="javascript:void(0);",
-                        preview_fps=1,
                         preview_quality=80,
                         preview_width=720,
                         preview_height=405,
@@ -151,7 +155,6 @@ def webui_setup():
     return render_template('setup.tpl.html', 
                            video_src=settings_obj['video_src'],
                            camera_web_url=settings_obj['camera_web_url'],
-                           preview_fps=settings_obj['preview_fps'],
                            preview_quality=settings_obj['preview_quality'],
                            preview_width=settings_obj['preview_width'],
                            preview_height=settings_obj['preview_height'],
@@ -191,7 +194,6 @@ def api_setup():
         config.debug = request.json.get('debug', False)
         config.video_src = request.json.get('video_src', '')
         config.camera_web_url = request.json.get('camera_web_url', '')
-        config.preview_fps = request.json.get('preview_fps', 1)
         config.preview_quality = request.json.get('preview_quality', 80)
         config.preview_width = request.json.get('preview_width', 854)
         config.preview_height = request.json.get('preview_height', 480)
@@ -333,7 +335,6 @@ def webapi_settings_update():
         _up_dict.debug = request.form.get('debug', False)
         _up_dict.video_src = request.form.get('video_src', '')
         _up_dict.camera_web_url = request.form.get('camera_web_url', '')
-        _up_dict.preview_fps = request.form.get('preview_fps', 10)
         _up_dict.preview_width = request.form.get('preview_width', 320)
         _up_dict.preview_height = request.form.get('preview_height', 180)
         _up_dict.max_detection = request.form.get('max_detection', 240)
@@ -358,33 +359,13 @@ def webapi_settings_update():
         exit_program()
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
-    
-
-def gather_img():
-    while True:
-        time.sleep(1.0 / config.preview_fps)
-        encode_param = [int(cv.IMWRITE_JPEG_QUALITY), config.preview_quality]
-        pw, ph = config.preview_width, config.preview_height
-        if current_frame is not None:
-            minifrm = cv.resize(current_frame, (pw, ph), interpolation=cv.INTER_NEAREST)
-            _, frame = cv.imencode('.jpg', minifrm, encode_param)
-        else:
-            img = np.zeros((ph, pw, 3), dtype=np.uint8)
-            _, frame = cv.imencode('.jpg', img, encode_param)
-        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame.tobytes() + b'\r\n')
-
-
-@app.route('/video_preview')
-def video_preview():
-    minifrm = gather_img()
-    return Response(minifrm, mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
 @app.route('/video/get_frame')
 def get_frame():
     # current frame
     encode_param = [int(cv.IMWRITE_JPEG_QUALITY), config.preview_quality]
-    pw, ph = 1920, 1080
+    pw, ph = config.preview_width, config.preview_height
     if current_frame is not None:
         minifrm = cv.resize(current_frame, (pw, ph), interpolation=cv.INTER_NEAREST)
         _, jpgframe = cv.imencode('.jpg', minifrm, encode_param)
@@ -445,6 +426,7 @@ if __name__ == '__main__':
     #    run_setup_loop()
     #    exit_program()
     
+    config.show_motion_map = False
 
     if args.debug is True:
         config.debug = args.debug

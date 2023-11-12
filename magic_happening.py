@@ -148,7 +148,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         roi_mask = cv2.resize(roi_mask, (config.tracking.det_w, config.tracking.det_h), interpolation=cv2.INTER_NEAREST)
 
     # Initial background subtractor and text font
-    fgbg = cv2.createBackgroundSubtractorMOG2()
+    fgbg = cv2.createBackgroundSubtractorMOG2(history=1000, varThreshold=128, detectShadows=True)
     font = cv2.FONT_HERSHEY_PLAIN
 
     blob_min_width_far = config.tracking.min_rock_pix
@@ -295,7 +295,10 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         extra_info.avg_color = avg_color
         if avg_color > 255//80:
             #logging.debug(f"Too much noise detected, skipping frame: {avg_color}")
-            _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+            if config.show_motion_map:
+                _frame = cv2.resize(cv2.cvtColor(morph, cv2.COLOR_GRAY2BGR), (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+            else:
+                _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
             current_frame[:] = _frame[:]
             frame_update_time = datetime.utcnow().timestamp()
             continue
@@ -383,7 +386,10 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         # if too many objects detected, skip this frame
         if obj_cnt > config.max_detection:
             #logging.debug(f"Too many movements detected, skipping frame: {num_labels}")
-            _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+            if config.show_motion_map:
+                _frame = cv2.resize(cv2.cvtColor(morph, cv2.COLOR_GRAY2BGR), (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+            else:
+                _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
             current_frame[:] = _frame[:]
             frame_update_time = datetime.utcnow().timestamp()
             continue
@@ -406,7 +412,8 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                 x, y, w, h, area = rt
                 # rotate area 180 degree to get volume
                 depth_esti = (w+h) // 2
-                obj_vol = w * h * depth_esti * config.frame_dist_cm / 100.0
+                rat_m3 = (config.frame_dist_cm / 100.0) ** 3
+                obj_vol = (w * h * depth_esti * rat_m3)
                 volumes.append(obj_vol)
             max_vol = np.max(volumes)
             max_cnt = len(volumes)
@@ -444,8 +451,8 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                             if time_dur == 0:
                                 tracked_object.speed = 0
                             else:
-                                tracked_object.speed = obj_path_length / time_dur / 100.0
-                            rock_evt.max_speed = max(rock_evt.max_speed, tracked_object.speed * config.frame_dist_cm / 100)
+                                tracked_object.speed = obj_path_length / time_dur
+                            rock_evt.max_speed = max(rock_evt.max_speed, tracked_object.speed * (config.frame_dist_cm / 100))
 
                             # Display speed if available
                             cv2.putText(frame, "SPD: {} M/s".format(round(tracked_object.speed, 2)), (int(trace_x), int(trace_y)), font, 3, (0, 255, 255), 2, cv2.LINE_AA)
@@ -464,7 +471,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                     good_objtracks[obj_id] = objtracks[obj_id]
             
             objtracks = good_objtracks
-            rock_evt.max_vol = max(rock_evt.max_vol, max_vol / 1_000_000)
+            rock_evt.max_vol = max(rock_evt.max_vol, max_vol)
             rock_evt.max_count = max(rock_evt.max_count, max_cnt)
             rock_evt.ts_end = datetime.now().timestamp()
 
@@ -477,7 +484,10 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
 
         #cv2.putText(frame, "FPS: {}".format(fps_e), (89, 124), font, 2, (0, 0, 0), 2, cv2.LINE_AA)
         #cv2.putText(frame, "FPS: {}".format(fps_e), (87, 122), font, 2, (255, 255, 255), 2, cv2.LINE_AA)
-        _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+        if config.show_motion_map:
+            _frame = cv2.resize(cv2.cvtColor(morph, cv2.COLOR_GRAY2BGR), (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+        else:
+            _frame = cv2.resize(frame, (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
         current_frame[:] = _frame[:]
         frame_update_time = datetime.utcnow().timestamp()
 
