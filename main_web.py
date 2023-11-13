@@ -459,9 +459,7 @@ if __name__ == '__main__':
     if not os.path.exists("./tmp"):
         #shutil.rmtree("./tmp")
         os.mkdir("./tmp")
-
-    if os.path.exists("/ssd_disk") and not os.path.exists("/ssd_disk/dets"):
-        os.mkdir("/ssd_disk/dets")
+    
 
     main_loop_running = True
     
