@@ -1,4 +1,17 @@
 # -*- encoding: utf-8 -*-
+# this module is used to process frame from video source
+# it will detect object and track them as well as generate event when falling rock is detected
+# the steps are as follow:
+# 1. get a frame from a queue
+# 2. resize the frame to a certain size (config.tracking.det_w, config.tracking.det_h)
+# 3. apply background subtraction to the resized frame: createBackgroundSubtractorMOG2
+# 4. apply connected components to the background subtracted frame
+# 5. find the center of each connected component
+# 6. if the center is black in the mask, skip it
+# 7. if the center is in the yolo detected object, skip it
+# 8. if the center is in the ROI mask, skip it
+# 9. if the center is in the green mask, skip it
+
 
 __author__ = "Mr.Bemani"
 
@@ -30,7 +43,9 @@ if "PC_TEST" in os.environ and os.environ["PC_TEST"] == "1":
 else:
     try:
         USE_RKNN = True
-        import object_detector as odet
+        import rknnlite
+        from rknnlite.api import RKNNLite
+        #import object_detector as odet
         #import object_classifier as objcls
     except ImportError:
         USE_RKNN = False
@@ -136,8 +151,6 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
     YOLO_NUM_CLASS = 80
     YOLO_IN_SIZE = 416
     rknn_det = None
-    if USE_RKNN:
-        rknn_det = odet.load_rknn_model("models/yolo.rknn")
     model = None
     last_patch = None
 
@@ -245,33 +258,6 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
 
 
         yl_dets = []
-        if USE_RKNN:
-            img = tsutil.pad_cvimg_to_square(frame, (YOLO_IN_SIZE, YOLO_IN_SIZE))
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            outputs = rknn_det.inference(inputs=[img])
-            reshaped_outputs = []
-            for i in range(len(outputs)):
-                reshaped_outputs.append(outputs[i].reshape(YOLO_SPAN, (YOLO_NUM_CLASS + 5), outputs[i].shape[2], outputs[i].shape[3]))
-    
-            input_data = []
-            for i in range(len(reshaped_outputs)):
-                input_data.append(np.transpose(reshaped_outputs[i], (2, 3, 0, 1)))
-
-            yl_boxes, yl_classes, yl_scores = odet.yolov3_post_process(input_data, is_tiny=True, in_size=YOLO_IN_SIZE, nms_thresh=0.5, obj_thresh=0.7)
-            # remove boxes with class_id = 0 or 2.
-            yl_boxes = np.array(yl_boxes)
-            yl_classes = np.array(yl_classes)
-            yl_scores = np.array(yl_scores)
-            yl_boxes_0 = yl_boxes[yl_classes == 0]
-            #yl_scores_0 = yl_scores[yl_classes == 0]
-            yl_boxes_2 = yl_boxes[yl_classes == 2]
-            #yl_scores_2 = yl_scores[yl_classes == 2]
-            # concatenate
-            yl_boxes = np.concatenate((yl_boxes_0, yl_boxes_2))
-            yl_boxes = odet.remove_inside_boxes(yl_boxes)
-            yl_dets = odet.combine_overlapping_boxes(yl_boxes, 0.5)
-        if yl_dets is None:
-            yl_dets = []
 
         # Resize frame to fit the screen
         det_frame = cv2.resize(frame, (det_w, det_h))
@@ -455,7 +441,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                             rock_evt.max_speed = max(rock_evt.max_speed, tracked_object.speed * (config.frame_dist_cm / 100))
 
                             # Display speed if available
-                            cv2.putText(frame, "SPD: {} M/s".format(round(tracked_object.speed, 2)), (int(trace_x), int(trace_y)), font, 3, (0, 255, 255), 2, cv2.LINE_AA)
+                            #cv2.putText(frame, "SPD: {} M/s".format(round(tracked_object.speed, 2)), (int(trace_x), int(trace_y)), font, 3, (0, 255, 255), 2, cv2.LINE_AA)
                             #cv2.putText(frame, 'ID: '+ str(tracked_object.track_id), (int(trace_x), int(trace_y)), font, 3, (255, 255, 255), 2, cv2.LINE_AA)
                     if len(tracked_object.trace) > 0:
                         this_pt = [int(tracked_object.trace[-1][0][0]), int(tracked_object.trace[-1][1][0])]
@@ -463,14 +449,14 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                         objtracks[tracked_object.track_id][1].append((ts_this_pt, this_pt))
 
             # filter out bad traces
-            good_objtracks = dict()
-            for obj_id in objtracks:
-                if check_trace(objtracks[obj_id][1], 
-                               config.tracking.min_y_motion, 
-                               config.tracking.min_y_x_ratio):
-                    good_objtracks[obj_id] = objtracks[obj_id]
+            #good_objtracks = dict()
+            #for obj_id in objtracks:
+                #if check_trace(objtracks[obj_id][1], 
+                #               config.tracking.min_y_motion, 
+                #               config.tracking.min_y_x_ratio):
+                #    good_objtracks[obj_id] = objtracks[obj_id]
             
-            objtracks = good_objtracks
+            #objtracks = good_objtracks
             rock_evt.max_vol = max(rock_evt.max_vol, max_vol)
             rock_evt.max_count = max(rock_evt.max_count, max_cnt)
             rock_evt.ts_end = datetime.now().timestamp()
