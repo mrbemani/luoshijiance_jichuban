@@ -28,16 +28,11 @@ import subprocess as subp
 
 import json
 from addict import Dict
-from tsutil import zip_dir
+
+import tsutil
 
 import numpy as np
 import cv2 as cv
-
-logging.basicConfig(
-    level=logging.DEBUG, 
-    format='%(asctime)s %(levelname)s %(message)s',
-    filename='main_web.log', filemode='a')
-
 
 def restart_program():
     """Restarts the current program, with file objects and descriptors
@@ -289,9 +284,9 @@ def api_get_dets():
     try:
         os.system("rm -rf /tmp/dets.zip")
         if os.path.exists("/opt/dets"):
-            zip_dir("/opt/dets/", "/tmp/dets.zip", clear_dir=False)
+            tsutil.zip_dir("/opt/dets/", "/tmp/dets.zip", clear_dir=False)
         else:
-            zip_dir("./tmp/", "/tmp/dets.zip", clear_dir=False)
+            tsutil.zip_dir("./tmp/", "/tmp/dets.zip", clear_dir=False)
         return send_from_directory("/tmp/", "dets.zip", as_attachment=True)
     except:
         return jsonify({'status': 'error', 'message': 'failed to get dets'}), 500
@@ -459,7 +454,7 @@ if __name__ == '__main__':
     if not os.path.exists("./tmp"):
         #shutil.rmtree("./tmp")
         os.mkdir("./tmp")
-    
+
 
     main_loop_running = True
     
