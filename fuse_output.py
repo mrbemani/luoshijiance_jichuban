@@ -7,80 +7,7 @@ import datetime
 import json
 import threading
 import cv2
-
-""" # trace.json format
-{
-  "4165": [
-    [
-      129,
-      235,
-      228
-    ],
-    [
-      [
-        0.0012857913970947266,
-        [
-          1232,
-          148
-        ]
-      ]
-    ]
-  ],
-  "4171": [
-    [
-      193,
-      167,
-      234
-    ],
-    [
-      [
-        0.0016779899597167969,
-        [
-          804,
-          224
-        ]
-      ],
-      [
-        0.13578295707702637,
-        [
-          804,
-          224
-        ]
-      ]
-    ]
-  ],
-  "4172": [
-    [
-      231,
-      100,
-      254
-    ],
-    [
-      [
-        0.0020999908447265625,
-        [
-          705,
-          301
-        ]
-      ],
-      [
-        0.13623595237731934,
-        [
-          705,
-          301
-        ]
-      ],
-      [
-        0.5502068996429443,
-        [
-          705,
-          301
-        ]
-      ]
-    ]
-  ]
-}
-"""
+import api
 
 
 def get_mp4_list(path):
@@ -92,6 +19,7 @@ def get_mp4_list(path):
     # sort mp4_list by timestamp
     mp4_list.sort(key=lambda x: int(x.split(os.path.sep)[-1].split('.')[0]))
     return mp4_list
+
 
 def parse_trace_json(trace_json):
     with open(trace_json, 'r', encoding="utf-8") as f:
@@ -128,7 +56,7 @@ def draw_frame_overlay(frame, frame_ts, record_ts, tracks):
     return frame
 
 
-def augment_record_video(record_id, fps=25, dim=(1920, 1080)):
+def augment_record_video(evt, fps=25, dim=(1920, 1080)):
     time.sleep(2.0)
     mp4_list = get_mp4_list(os.path.join('outputs', record_id))
     trace_json = os.path.join('outputs', record_id, 'trace.json')
@@ -137,7 +65,7 @@ def augment_record_video(record_id, fps=25, dim=(1920, 1080)):
         return
     # else if mp4 files exists, fuse them
     mp4_start_ts = int(mp4_list[0].split(os.path.sep)[-1].split('.')[0])
-    record_start_ts = float(record_id) / 1000.0
+    record_start_ts = evt.ts_start
     record_ts_offset = record_start_ts - mp4_start_ts
     tracks = parse_trace_json(trace_json)
     augmented_writer = cv2.VideoWriter(os.path.join('outputs', record_id, 'augmented.mkv'), cv2.VideoWriter_fourcc(*'mp4v'), fps, dim)
@@ -159,11 +87,16 @@ def augment_record_video(record_id, fps=25, dim=(1920, 1080)):
         okfp.write('1')
         okfp.flush()
         os.fsync(okfp.fileno())
+    # send record to server
+    api.send_falling_rock_event(record_id, tracks, 
+                                evt.ts_start, evt.ts_end, 
+                                evt.max_count, evt.max_volumn, 
+                                evt.max_speed)
 
 
-def make_fuse_output(record_id):
+def make_fuse_output(evt):
     # call augment_record_video in a thread
-    t = threading.Thread(target=augment_record_video, args=(str(record_id),))
+    t = threading.Thread(target=augment_record_video, args=(evt,))
     t.start()
 
 

@@ -18,6 +18,7 @@ __author__ = "Mr.Bemani"
 import sys
 import os
 import traceback
+import threading
 import json
 import shutil
 import random
@@ -31,6 +32,7 @@ from datetime import datetime
 import math
 import tsutil
 from fuse_output import make_fuse_output
+import api
 
 
 cv2.ocl.setUseOpenCL(True)
@@ -185,6 +187,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
     extra_info.objtracks = objtracks
     while main_loop_running_cb():
         fps_f = cv2.getTickCount()
+        threading.Thread(api.send_heartbeat, kwargs=dict(device_temperature=0.0)).start()
 
         ts_now = datetime.now().timestamp()
         if rock_evt is not None and (ts_now - rock_evt.ts_end > MAX_GAP_SECONDS or ts_now - rock_evt.ts_start > 180):
@@ -222,7 +225,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                     json.dump(valid_tracks, open(os.path.join(rock_evt.frame_dir, "trace.json"), "w", encoding="utf-8"), indent=2)
                     if USE_RKNN:
                         send_sms(config, rock_evt)
-                    make_fuse_output(rock_evt.record)
+                    make_fuse_output(rock_evt)
                 else:
                     # remove record_id folder
                     shutil.rmtree(rock_evt.frame_dir)
