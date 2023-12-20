@@ -4,6 +4,7 @@ __author__ = 'Mr.Bemani'
 
 import os
 import requests
+import json
 import threading
 import event_utils as evtu
 import uuid
@@ -25,8 +26,14 @@ def get_device_task():
     data = {
         "device_id": DEVICE_ID
     }
-    response = requests.post(url, headers=headers, json=data)
-    return response.json()
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return json.dumps(dict(status=0, error=response.status_code, message="Bad HTTP status code"))
+    except Exception as e:
+        return json.dumps(dict(status=0, error=1, message=e.__str__()))
 
 # 心跳包POST格式
 def send_heartbeat(device_longitude = 0.0, device_latitude = 0.0, device_height = 0.0, 
@@ -62,8 +69,14 @@ def send_heartbeat(device_longitude = 0.0, device_latitude = 0.0, device_height 
         "device_time": device_time,
         "frame_url": frame_url
     }
-    response = requests.post(url, headers=headers, json=data)
-    return response.json()
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return json.dumps(dict(status=0, error=response.status_code, message="Bad HTTP status code"))
+    except Exception as e:
+        return json.dumps(dict(status=0, error=1, message=e.__str__()))
 
 # 落石事件POST格式
 def send_falling_rock_event(event_id, traces, start_time, end_time, max_count, max_volumn, max_speed):
@@ -89,8 +102,14 @@ def send_falling_rock_event(event_id, traces, start_time, end_time, max_count, m
             "video_expire": datetime.fromtimestamp(video_expire).strftime("%Y-%m-%dT%H:%M:%S")
         }
     }
-    response = requests.post(url, headers=headers, json=data)
-    return response.json()
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return json.dumps(dict(status=0, error=response.status_code, message="Bad HTTP status code"))
+    except Exception as e:
+        return json.dumps(dict(status=0, error=1, message=e.__str__()))
 
 # 表面变化事件POST格式
 def send_surface_change_event(event_id, flow, start_time, end_time, start_image_data, end_image_data):
@@ -111,5 +130,11 @@ def send_surface_change_event(event_id, flow, start_time, end_time, start_image_
             "end_image_data": end_image_data
         }
     }
-    response = requests.post(url, headers=headers, json=data)
-    return response.json()
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return json.dumps(dict(status=0, error=response.status_code, message="Bad HTTP status code"))
+    except Exception as e:
+        return json.dumps(dict(status=0, error=1, message=e.__str__()))
