@@ -6,15 +6,16 @@ import os
 import requests
 import json
 import threading
+import tsutil
 import event_utils as evtu
 import uuid
 from datetime import datetime
 from addict import Dict
 from configure import config
 
-API_SERVER = os.environ.get("API_SERVER", "http://www.smallworld-network.com.cn:10001")
+API_SERVER = os.environ.get("API_SERVER", "http://10.0.134.46:48080/api/slope")
 HTTP_FORWARD = f"http://www.smallworld-network.com.cn:" + os.environ.get("HTTP_FORWARD_PORT", "10001")
-DEVICE_ID = os.environ.get("DEVICE_ID", "0000000000000000")
+DEVICE_ID = os.popen("ifconfig eth0 | grep ether | awk '{print $2}'").read().strip().replace(":", "")
 
 # 设备任务获取
 def get_device_task():
@@ -38,11 +39,12 @@ def get_device_task():
 # 心跳包POST格式
 def send_heartbeat(device_longitude = 0.0, device_latitude = 0.0, device_height = 0.0, 
                    device_angle = 0.0, device_battery = 0.0, device_solar_status = 0.0, 
-                   device_temperature = 0.0, device_humidity = 0.0, device_pressure = 0.0, 
+                   device_humidity = 0.0, device_pressure = 0.0, 
                    device_acceleration = 0.0, device_speed = 0.0, device_direction = 0.0):
     url = f"{API_SERVER}/api/v1/device/heartbeat"
     device_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     frame_url = f"{HTTP_FORWARD}/frames/frame_{device_time}.jpg"
+    device_temperature = tsutil.get_soc_temperature() / 1000.0
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json"

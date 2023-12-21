@@ -261,3 +261,29 @@ def is_mostly_yellow(image_path, threshold=0.5):
     else:
         return False
 
+# thermal_zone0: soc-thermal
+# thermal_zone1: bigcore0-thermal
+# thermal_zone2: bigcore1-thermal
+# thermal_zone3: littlecore-thermal
+# thermal_zone4: center-thermal
+# thermal_zone5: gpu-thermal
+# thermal_zone6: npu-thermal
+
+def soc_temperature():
+    return os.popen("cat /sys/class/thermal/thermal_zone0/temp").read().strip()
+
+def center_temperature():
+    return os.popen("cat /sys/class/thermal/thermal_zone4/temp").read().strip()
+
+def cpu_temperature():
+    bigcore0 = os.popen("cat /sys/class/thermal/thermal_zone1/temp").read().strip()
+    bigcore1 = os.popen("cat /sys/class/thermal/thermal_zone2/temp").read().strip()
+    littlecore = os.popen("cat /sys/class/thermal/thermal_zone3/temp").read().strip()
+    return (bigcore0, bigcore1, littlecore)
+
+def gpu_temperature():
+    return os.popen("cat /sys/class/thermal/thermal_zone5/temp").read().strip()
+
+def npu_temperature():
+    return os.popen("cat /sys/class/thermal/thermal_zone6/temp").read().strip()
+

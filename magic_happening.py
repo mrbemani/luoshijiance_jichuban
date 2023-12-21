@@ -187,7 +187,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
     extra_info.objtracks = objtracks
     while main_loop_running_cb():
         fps_f = cv2.getTickCount()
-        threading.Thread(target=api.send_heartbeat, kwargs=dict(device_temperature=0.0)).start()
+        threading.Thread(target=api.send_heartbeat).start()
 
         ts_now = datetime.now().timestamp()
         if rock_evt is not None and (ts_now - rock_evt.ts_end > MAX_GAP_SECONDS or ts_now - rock_evt.ts_start > 180):
