@@ -36,3 +36,4 @@ denoisenet/
 *.pdf
 mask.png
 magic_happening_lab_demo.py
+*.env
