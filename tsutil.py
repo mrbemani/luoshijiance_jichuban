@@ -40,7 +40,7 @@ handlers = {
 
 # Add handlers to the logger
 for handler in handlers.values():
-    tslogger.addHandler(handler)
+   tslogger.addHandler(handler)
 
 # Override the built-in print function
 python_original_print = print
