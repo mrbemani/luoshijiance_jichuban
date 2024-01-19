@@ -9,6 +9,15 @@ __pycache__
 *.mp4
 *.mov
 *.avi
+*.mkv
+*.rmvb
+*.flv
+*.m4v
+*.mpg
+*.mpeg
+*.wmv
+*.asf
+*.rm
 *.webm
 *.csv
 thirdparty
@@ -27,6 +36,8 @@ thirdparty
 *.exe
 mask.png
 *.zip
+*.7z
+*.rar
 examples/
 tracenet/
 denoisenet/
