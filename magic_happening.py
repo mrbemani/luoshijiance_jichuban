@@ -37,21 +37,21 @@ import api
 
 cv2.ocl.setUseOpenCL(True)
 
-logging.basicConfig(level=logging.DEBUG)
+tslogger = logging.getLogger("ts_app_logger")
 
 if "PC_TEST" in os.environ and os.environ["PC_TEST"] == "1":
-    logging.info("PC_TEST is set, object classification not available")
+    tslogger.info("PC_TEST is set, object classification not available")
     #import object_classifier_mockup as objcls
 else:
     try:
         USE_RKNN = True
-        import rknnlite
-        from rknnlite.api import RKNNLite
+        #import rknnlite
+        #from rknnlite.api import RKNNLite
         #import object_detector as odet
         #import object_classifier as objcls
     except ImportError:
         USE_RKNN = False
-        logging.error("Failed to import object_classifier. Object classifier not available")
+        tslogger.error("Failed to import object_classifier. Object classifier not available")
         import object_detector_pc as odet
 from tracker import Tracker
 
@@ -60,11 +60,11 @@ from event_utils import create_falling_rock_event, store_event
 try:
     from sms import send_sms
 except:
-    logging.error("Failed to import sms. SMS not available")
+    tslogger.error("Failed to import sms. SMS not available")
     # print traceback
     # traceback.print_exc()
     def send_sms(config, rock_evt):
-        logging.info("fake send_sms: " + repr(rock_evt))
+        tslogger.info("fake send_sms: " + repr(rock_evt))
 
 PF_W = 1920
 PF_H = 1080
@@ -79,15 +79,18 @@ bad_video_src = False
 
 
 def draw_object_tracks(frame: np.ndarray, objtracks: Dict, min_trace_length=4):
+    fh, fw = frame.shape[:2]
     for track_id, track in objtracks.items():
         color = track[0]
         trace = track[1]
         if len(trace) < min_trace_length:
             continue
         for i in range(len(trace)-1):
-            cv2.line(frame, trace[i][1], trace[i+1][1], color, 4)
+            cv2.line(frame, 
+                     (int(trace[i][1][0]*fw), int(trace[i][1][1]*fh)), 
+                     (int(trace[i+1][1][0]*fw), int(trace[i+1][1][1]*fh)), color, 4)
         if len(trace) > 0:
-            cv2.putText(frame, str(track_id), trace[-1][1], cv2.FONT_HERSHEY_PLAIN, 2, color, 2, cv2.LINE_AA)
+            cv2.putText(frame, str(track_id), (int(trace[-1][1][0]*fw), int(trace[-1][1][1]*fh)), cv2.FONT_HERSHEY_PLAIN, 2, color, 2, cv2.LINE_AA)
     return frame
 
 
@@ -185,18 +188,24 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
     objtrace = []
     objtracks = dict()
     extra_info.objtracks = objtracks
+    last_heartbeat = 0
     while main_loop_running_cb():
         fps_f = cv2.getTickCount()
-        threading.Thread(target=api.send_heartbeat).start()
+
+        if datetime.now().timestamp() - last_heartbeat  > 300:
+            last_heartbeat = datetime.now().timestamp()
+            threading.Thread(target=api.send_heartbeat).start()
 
         ts_now = datetime.now().timestamp()
-        if rock_evt is not None and (ts_now - rock_evt.ts_end > MAX_GAP_SECONDS or ts_now - rock_evt.ts_start > 180):
+        if rock_evt is not None and (ts_now - rock_evt.ts_end > MAX_GAP_SECONDS or ts_now - rock_evt.ts_start > 60):
             # too slow, discard event
             if rock_evt.max_speed < config.tracking.min_speed_threshold:
-                logging.debug(f"Discarding event, too slow: {rock_evt.max_speed}")
+                tslogger.debug(f"Discarding event, too slow: {rock_evt.max_speed}")
                 # remove record_id folder
                 shutil.rmtree(rock_evt.frame_dir)
             else:#if True: # always save event
+                print ("saving event")
+                # filter out bad traces
                 valid_tracks = dict()
                 for obj_id in objtracks:
                     if len(objtracks[obj_id][1]) < config.tracking.min_trace_length: # if trace length is less than config.min_trace_length, discard
@@ -208,7 +217,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                     delta_x = max(0.00001, abs(track_end_x - track_start_x))
                     delta_y = track_end_y - track_start_y
                     # if y motion is less than downward 2 pixels, discard
-                    if delta_y < config.tracking.min_y_motion * PF_H:
+                    if delta_y < config.tracking.min_y_motion:
                         continue
                     # if y motion is less than config.min_y_x_ratio times x motion, discard
                     if delta_y / delta_x < config.tracking.min_y_x_ratio:
@@ -239,10 +248,10 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         try:
             frame = frame_queue.get(timeout=10.0)
         except queue.Empty:
-            logging.debug("frame_queue empty")
+            tslogger.debug("frame_queue empty")
             bad_video_src = True
-            logging.error("!!! Bad Video Source !!!")
-            logging.error("Restarting Program...")
+            tslogger.error("!!! Bad Video Source !!!")
+            tslogger.error("Restarting Program...")
             os._exit(0)
 
         if frame is None:
@@ -283,7 +292,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         avg_color = np.average(morph)
         extra_info.avg_color = avg_color
         if avg_color > 255//80:
-            #logging.debug(f"Too much noise detected, skipping frame: {avg_color}")
+            #tslogger.debug(f"Too much noise detected, skipping frame: {avg_color}")
             if config.show_motion_map:
                 _frame = cv2.resize(cv2.cvtColor(morph, cv2.COLOR_GRAY2BGR), (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
             else:
@@ -374,7 +383,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
         
         # if too many objects detected, skip this frame
         if obj_cnt > config.max_detection:
-            #logging.debug(f"Too many movements detected, skipping frame: {num_labels}")
+            #tslogger.debug(f"Too many movements detected, skipping frame: {num_labels}")
             if config.show_motion_map:
                 _frame = cv2.resize(cv2.cvtColor(morph, cv2.COLOR_GRAY2BGR), (PF_W, PF_H), fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
             else:
@@ -447,7 +456,7 @@ def process_frame_loop(config: dict, main_loop_running_cb: Callable, frame_queue
                             #cv2.putText(frame, "SPD: {} M/s".format(round(tracked_object.speed, 2)), (int(trace_x), int(trace_y)), font, 3, (0, 255, 255), 2, cv2.LINE_AA)
                             #cv2.putText(frame, 'ID: '+ str(tracked_object.track_id), (int(trace_x), int(trace_y)), font, 3, (255, 255, 255), 2, cv2.LINE_AA)
                     if len(tracked_object.trace) > 0:
-                        this_pt = [int(tracked_object.trace[-1][0][0]), int(tracked_object.trace[-1][1][0])]
+                        this_pt = [float(tracked_object.trace[-1][0][0]) / original_w, float(tracked_object.trace[-1][1][0]) / original_h]
                         ts_this_pt = datetime.now().timestamp() - rock_evt.ts_start
                         objtracks[tracked_object.track_id][1].append((ts_this_pt, this_pt))
 

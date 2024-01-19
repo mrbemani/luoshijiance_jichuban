@@ -16,7 +16,6 @@ from configure import config
 
 # 日志记录
 api_logger = logging.getLogger("api")
-api_logger.setLevel(logging.DEBUG)
 fh = logging.FileHandler("api.log")
 fh.setLevel(logging.DEBUG)
 formatter = logging.Formatter("[%(asctime)s - %(name)s - %(levelname)s]: %(message)s")
@@ -60,7 +59,10 @@ def send_heartbeat(device_longitude = 0.0, device_latitude = 0.0, device_height 
     api_logger.info(f"Send heartbeat to {url}")
     device_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     frame_url = f"{HTTP_FORWARD}/frames/frame_{device_time}.jpg"
-    device_temperature = tsutil.get_soc_temperature() / 1000.0
+    try:
+        device_temperature = tsutil.soc_temperature() / 1000.0
+    except Exception as e:
+        device_temperature = 0.0
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json"
@@ -172,8 +174,22 @@ def send_surface_change_event(event_id, flow, start_time, end_time, start_image_
 
 # testcase
 if __name__ == "__main__":
+    print ("run api.py directly will trigger testcase with multiple requests...")
+    print ("current API_SERVER is: ", API_SERVER)
+    print ("current DEVICE_ID is: ", DEVICE_ID)
+    print ("current HTTP_FORWARD is: ", HTTP_FORWARD)
+    print ("current config is: ", config)
+    k = input("Enter 'q' to exit or any other key to continue...")
+    if k == "q":
+        exit(0)
+    import time
     print(get_device_task())
+    time.sleep(1)
     print(send_heartbeat())
+    time.sleep(1)
     print(send_falling_rock_event("test", "test", 0, 0, 0, 0, 0))
+    time.sleep(1)
     print(send_surface_change_event("test", "test", 0, 0, "test", "test"))
+    time.sleep(1)
+    print ("done")
     pass

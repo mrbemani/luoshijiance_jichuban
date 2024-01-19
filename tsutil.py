@@ -43,7 +43,6 @@ for handler in handlers.values():
    tslogger.addHandler(handler)
 
 # Override the built-in print function
-python_original_print = print
 def print(*args, **kwargs):
     # Convert all arguments to string and concatenate them
     message = ' '.join(map(str, args))
@@ -51,12 +50,11 @@ def print(*args, **kwargs):
     if not EXCLUDE_PATTERN.search(message):
         # If it doesn't contain the pattern, log the message and print it
         if PRINT_PATTERN.search(message):
-            python_original_print(message, **kwargs)
+            sys.stdout.write(message, **kwargs)
         else:
             tslogger.info(message)  # Adjust the logging level if necessary
     # If the pattern is found, neither log nor print the message
 
-sys.stdout.write = print
 
 
 # pad image to square
@@ -270,20 +268,20 @@ def is_mostly_yellow(image_path, threshold=0.5):
 # thermal_zone6: npu-thermal
 
 def soc_temperature():
-    return os.popen("cat /sys/class/thermal/thermal_zone0/temp").read().strip()
+    return float(os.popen("cat /sys/class/thermal/thermal_zone0/temp").read().strip())
 
 def center_temperature():
-    return os.popen("cat /sys/class/thermal/thermal_zone4/temp").read().strip()
+    return float(os.popen("cat /sys/class/thermal/thermal_zone4/temp").read().strip())
 
 def cpu_temperature():
-    bigcore0 = os.popen("cat /sys/class/thermal/thermal_zone1/temp").read().strip()
-    bigcore1 = os.popen("cat /sys/class/thermal/thermal_zone2/temp").read().strip()
-    littlecore = os.popen("cat /sys/class/thermal/thermal_zone3/temp").read().strip()
+    bigcore0 = float(os.popen("cat /sys/class/thermal/thermal_zone1/temp").read().strip())
+    bigcore1 = float(os.popen("cat /sys/class/thermal/thermal_zone2/temp").read().strip())
+    littlecore = float(os.popen("cat /sys/class/thermal/thermal_zone3/temp").read().strip())
     return (bigcore0, bigcore1, littlecore)
 
 def gpu_temperature():
-    return os.popen("cat /sys/class/thermal/thermal_zone5/temp").read().strip()
+    return float(os.popen("cat /sys/class/thermal/thermal_zone5/temp").read().strip())
 
 def npu_temperature():
-    return os.popen("cat /sys/class/thermal/thermal_zone6/temp").read().strip()
+    return float(os.popen("cat /sys/class/thermal/thermal_zone6/temp").read().strip())
 

@@ -34,6 +34,8 @@ import tsutil
 import numpy as np
 import cv2 as cv
 
+ts_app_logger = logging.getLogger("ts_app_logger")
+
 def restart_program():
     """Restarts the current program, with file objects and descriptors
        cleanup
@@ -243,7 +245,7 @@ def webui():
                           str(x[7])) for x in last_n_alerts]
     except:
         # log traceback
-        logging.error(traceback.format_exc())
+        ts_app_logger.error(traceback.format_exc())
     video_preview_url = "/video_preview"
     live_url = config.camera_web_url
     location = config.location
@@ -475,13 +477,13 @@ if __name__ == '__main__':
     # start webserver
     try:
         print ("Start webserver...")
-        logging.info('Starting Webserver...')
+        ts_app_logger.info('Starting Webserver...')
         #app.run(host="0.0.0.0", port=8080, debug=config.debug, threaded=True)
         webserver = make_server("0.0.0.0", args.port, app, threaded=True)
-        logging.info('Webserver started.')
+        ts_app_logger.info('Webserver started.')
         webserver.serve_forever()
     except KeyboardInterrupt:
-        logging.info('KeyboardInterrupt, stopping...')
+        ts_app_logger.info('KeyboardInterrupt, stopping...')
 
     print ("Application is Deinitializing...", end='', flush=True)
     main_loop_running = False

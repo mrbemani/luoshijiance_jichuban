@@ -44,22 +44,23 @@ def draw_frame_overlay(frame, frame_ts, record_ts, tracks):
             if trace_ts > frame_ts:
                 break
             else:
+                fh, fw = frame.shape[:2]
                 cv2.line(frame, 
-                         (track['trace'][idx-1][1][0], track['trace'][idx-1][1][1]), 
-                         (track['trace'][idx][1][0], track['trace'][idx][1][1]), 
+                         (int(track['trace'][idx-1][1][0] * fw), int(track['trace'][idx-1][1][1] * fh)), 
+                         (int(track['trace'][idx][1][0] * fw), int(track['trace'][idx][1][1] * fh)), 
                          tuple(draw_color), 3, cv2.LINE_AA, 0)
                 cv2.circle(frame,
-                            (track['trace'][idx][1][0], track['trace'][idx][1][1]),
+                            (int(track['trace'][idx][1][0] * fw), int(track['trace'][idx][1][1] * fh)),
                             5,
                             tuple(draw_color),
                             -1)
     return frame
 
 
-def augment_record_video(evt, fps=25, dim=(1920, 1080)):
+def augment_record_video(evt, fps=25, dim=(960, 540)):
     time.sleep(2.0)
-    mp4_list = get_mp4_list(os.path.join('outputs', record_id))
-    trace_json = os.path.join('outputs', record_id, 'trace.json')
+    mp4_list = get_mp4_list(os.path.join('outputs', evt.record))
+    trace_json = os.path.join('outputs', evt.record, 'trace.json')
     # if no mp4 files, return
     if len(mp4_list) < 1:
         return
@@ -68,7 +69,7 @@ def augment_record_video(evt, fps=25, dim=(1920, 1080)):
     record_start_ts = evt.ts_start
     record_ts_offset = record_start_ts - mp4_start_ts
     tracks = parse_trace_json(trace_json)
-    augmented_writer = cv2.VideoWriter(os.path.join('outputs', record_id, 'augmented.mkv'), cv2.VideoWriter_fourcc(*'mp4v'), fps, dim)
+    augmented_writer = cv2.VideoWriter(os.path.join('outputs', evt.record, 'augmented.mkv'), cv2.VideoWriter_fourcc(*'mp4v'), fps, dim)
     frame_gap = 1.0 / fps
     frame_idx = 0
     for mp4 in mp4_list:
@@ -78,17 +79,18 @@ def augment_record_video(evt, fps=25, dim=(1920, 1080)):
             if not ret:
                 break
             frame_ts = mp4_start_ts + frame_idx * frame_gap
+            frame = cv2.resize(frame, dim, interpolation=cv2.INTER_NEAREST)
             aug_frame = draw_frame_overlay(frame, frame_ts, record_start_ts, tracks)
             augmented_writer.write(aug_frame)
             frame_idx += 1
         cap.release()
     augmented_writer.release()
-    with open(os.path.join('outputs', record_id, 'ok'), 'w', encoding="utf-8") as okfp:
+    with open(os.path.join('outputs', evt.record, 'ok'), 'w', encoding="utf-8") as okfp:
         okfp.write('1')
         okfp.flush()
         os.fsync(okfp.fileno())
     # send record to server
-    api.send_falling_rock_event(record_id, tracks, 
+    api.send_falling_rock_event(evt.record, tracks, 
                                 evt.ts_start, evt.ts_end, 
                                 evt.max_count, evt.max_volumn, 
                                 evt.max_speed)
