@@ -6,6 +6,7 @@ import os
 import requests
 import json
 import threading
+import traceback
 import tsutil
 import logging
 import event_utils as evtu
@@ -44,11 +45,8 @@ def get_device_task():
         api_logger.debug(f"Response data: \r\n{response.json()}\r\n")
         if response.status_code == 200:
             return response.json()
-        else:
-            return json.dumps(dict(status=0, error=response.status_code, message="Bad HTTP status code"))
-    except Exception as e:
-        api_logger.error(e.__str__())
-        return json.dumps(dict(status=0, error=1, message=e.__str__()))
+    except:
+        api_logger.error(traceback.format_exc())
 
 # 心跳包POST格式
 def send_heartbeat(device_longitude = 0.0, device_latitude = 0.0, device_height = 0.0, 
@@ -95,11 +93,8 @@ def send_heartbeat(device_longitude = 0.0, device_latitude = 0.0, device_height 
         api_logger.debug(f"Response data: \r\n{response.json()}\r\n")
         if response.status_code == 200:
             return response.json()
-        else:
-            return json.dumps(dict(status=0, error=response.status_code, message="Bad HTTP status code"))
-    except Exception as e:
-        api_logger.error(e.__str__())
-        return json.dumps(dict(status=0, error=1, message=e.__str__()))
+    except:
+        api_logger.error(traceback.format_exc())
 
 # 落石事件POST格式
 def send_falling_rock_event(event_id, traces, start_time, end_time, max_count, max_volumn, max_speed):
@@ -132,11 +127,8 @@ def send_falling_rock_event(event_id, traces, start_time, end_time, max_count, m
         api_logger.debug(f"Response data: \r\n{response.json()}\r\n")
         if response.status_code == 200:
             return response.json()
-        else:
-            return json.dumps(dict(status=0, error=response.status_code, message="Bad HTTP status code"))
-    except Exception as e:
-        api_logger.error(e.__str__())
-        return json.dumps(dict(status=0, error=1, message=e.__str__()))
+    except:
+        api_logger.error(traceback.format_exc())
 
 # 表面变化事件POST格式
 def send_surface_change_event(event_id, flow, start_time, end_time, start_image_data, end_image_data):
@@ -164,12 +156,8 @@ def send_surface_change_event(event_id, flow, start_time, end_time, start_image_
         api_logger.debug(f"Response data: \r\n{response.json()}\r\n")
         if response.status_code == 200:
             return response.json()
-        else:
-            return json.dumps(dict(status=0, error=response.status_code, message="Bad HTTP status code"))
-    except Exception as e:
-        api_logger.error(e.__str__())
-        return json.dumps(dict(status=0, error=1, message=e.__str__()))
-
+    except:
+        api_logger.error(traceback.format_exc())
 
 
 # testcase
