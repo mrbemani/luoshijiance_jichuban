@@ -92,7 +92,7 @@ def augment_record_video(evt, fps=25, dim=(960, 540)):
     # send record to server
     api.send_falling_rock_event(evt.record, tracks, 
                                 evt.ts_start, evt.ts_end, 
-                                evt.max_count, evt.max_volumn, 
+                                evt.max_count, evt.max_vol, 
                                 evt.max_speed)
 
 
